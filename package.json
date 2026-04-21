@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@grafana/scenes": "^7.4.0",
+    "@grafana/schema": "^13.0.1",
+    "@mage-and-co/mage_crop": "^1.0.14",
+    "docker": "^1.0.0",
+    "go": "^3.0.1",
+    "nodejs-latest": "^1.1.0"
+  }
+}
