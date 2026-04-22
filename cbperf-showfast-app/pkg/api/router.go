@@ -16,6 +16,16 @@ func SetupRouter(ds *db.DataStore) *gin.Engine {
 		v2.GET("/timeline", func(c *gin.Context) { GetTimelineV2(c, ds) })
 		v2.GET("/runs", func(c *gin.Context) { GetRunsV2(c, ds) })
 		v2.GET("/compare", func(c *gin.Context) { CompareV2(c, ds) })
+		v2.GET("/filters", func(c *gin.Context) { GetFiltersV2(c, ds) })
+
+		v2.POST("/metrics", func(c *gin.Context) { AddMetricV2(c, ds) })
+		v2.POST("/clusters", func(c *gin.Context) { AddClusterV2(c, ds) })
+		v2.POST("/benchmarks", func(c *gin.Context) { AddBenchmarkV2(c, ds) })
+
+		v2.PATCH("/benchmarks", func(c *gin.Context) { UpdateBenchmarkV2(c, ds) })
+		
+		v2.DELETE("/benchmarks", func(c *gin.Context) { DeleteBenchmarkV2(c, ds) })
+
 	}
 
 	return router

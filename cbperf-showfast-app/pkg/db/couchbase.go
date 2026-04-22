@@ -1,15 +1,16 @@
 package db
 
 import (
-	"os"
 	"fmt"
+	"os"
+	"time"
 
-	"github.com/couchbase/gocb"
+	"github.com/couchbase/gocb/v2"
 )
 
 type DataStore struct {
-	cluster *gocb.Cluster
-	buckets map[string]*gocb.Bucket
+	cluster 		*gocb.Cluster
+	collections 	map[string]*gocb.Collection
 }
 
 var couchbaseBuckets = []string{"benchmarks", "metrics", "clusters"}
@@ -23,45 +24,40 @@ func NewDataStore() (*DataStore, error) {
 		return nil, fmt.Errorf("Missing environment variables. Currently: CB_CONN_STRING=%s, CB_USERNAME=%s, CB_PASSWORD=%s", connString, username, password)
 	}
 
-	cluster, err := gocb.Connect(connString)
+	cluster, err := gocb.Connect(connString, gocb.ClusterOptions{
+		Authenticator: gocb.PasswordAuthenticator{
+			Username: username,
+			Password: password,
+		},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to connect to Couchbase cluster: %v", err)
 	}
-	err = cluster.Authenticate(gocb.PasswordAuthenticator{
-		Username: username,
-		Password: password,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("Failed to authenticate with Couchbase cluster: %v", err)
+
+	if err := cluster.WaitUntilReady(10*time.Second, nil); err != nil {
+		return nil, fmt.Errorf("Failed to wait for Couchbase cluster readiness: %v", err)
 	}
 
 	ds := &DataStore{
 		cluster: cluster,
-		buckets: make(map[string]*gocb.Bucket),
+		collections: make(map[string]*gocb.Collection),
 	}
 
 	for _, bucketName := range couchbaseBuckets {
-		bucket, err := cluster.OpenBucket(bucketName, "")
-		if err != nil {
+		bucket := cluster.Bucket(bucketName)
+		if err := bucket.WaitUntilReady(10*time.Second, nil); err != nil {
 			return nil, fmt.Errorf("Failed to open Couchbase bucket %s: %v", bucketName, err)
 		}
-		ds.buckets[bucketName] = bucket
+		ds.collections[bucketName] = bucket.DefaultCollection()
 	}
 
 	return ds, nil
 }
 
-func (ds *DataStore) GetBucket(bucketName string) (*gocb.Bucket, error) {
-	bucket, exists := ds.buckets[bucketName]
-	if !exists {
-		return nil, fmt.Errorf("Bucket %s not found in DataStore", bucketName)
-	}
-	return bucket, nil
+func (ds *DataStore) GetCollection(bucketName string) *gocb.Collection {
+	return ds.collections[bucketName]
 }
 
-func (ds *DataStore) GetCluster() (*gocb.Cluster, error) {
-	if ds.cluster == nil {
-		return nil, fmt.Errorf("Couchbase cluster not initialized")
-	}
-	return ds.cluster, nil
+func (ds *DataStore) GetCluster() *gocb.Cluster {
+	return ds.cluster
 }
