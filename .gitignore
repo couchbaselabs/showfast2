@@ -1,0 +1,39 @@
+# Environment variables
+.env
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+temp_path/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of code coverage andother test artifacts
+*.out
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Data and testing files
+data/
+test_data/
