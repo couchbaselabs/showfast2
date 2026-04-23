@@ -1,15 +1,22 @@
-.PHONY: build-plugin reload-plugin clean-plugin
+.PHONY: build-plugin build-docker reload-plugin clean-plugin
 
 # Build frontend assets and backend binaries into dist/
 build-plugin:
-	cd cbperf-showfast-app/ && npm run build
-	cd cbperf-showfast-app/ && mage -v
+	@cd cbperf-showfast-app/ && \
+	npm install && \
+	npm run build && \
+	mage -v
+
+build-docker: build-plugin
+	@cd cbperf-showfast-app && \
+	npm run server && \
+	docker compose --env-file .env up --build  2>&1 1>/dev/null -d
 
 # Reload Grafana so updated plugin artifacts are reloaded from the bind mount
 reload-plugin:
-	cd cbperf-showfast-app/ && docker compose restart grafana
+	@docker restart cbperf-showfast-app
 
 # Remove generated artifacts and local caches to prepare for a clean build
 clean-plugin:
-	cd cbperf-showfast-app/ && rm -rf dist node_modules/.cache .cache
-	cd cbperf-showfast-app/ && go clean -cache -testcache
+	@cd cbperf-showfast-app/ && rm -rf dist node_modules/.cache .cache
+	@cd cbperf-showfast-app/ && go clean -cache -testcache && mage clean

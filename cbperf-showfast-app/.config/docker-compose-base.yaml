@@ -29,3 +29,6 @@ services:
       GF_LOG_LEVEL: debug
       GF_DATAPROXY_LOGGING: 1
       GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: cbperf-showfast-app
+      CB_CONN_STRING: ${CB_CONN_STRING:-couchbase://host.docker.internal:8091}
+      CB_USERNAME: ${CB_USERNAME:-Administrator}
+      CB_PASSWORD: ${CB_PASSWORD:-password}

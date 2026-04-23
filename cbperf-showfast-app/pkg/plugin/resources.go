@@ -3,6 +3,9 @@ package plugin
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/cbperf/showfast/pkg/api"
+	"github.com/cbperf/showfast/pkg/db"
 )
 
 // handlePing is an example HTTP GET resource that returns a {"message": "ok"} JSON response.
@@ -38,7 +41,21 @@ func (a *App) handleEcho(w http.ResponseWriter, req *http.Request) {
 }
 
 // registerRoutes takes a *http.ServeMux and registers some HTTP handlers.
-func (a *App) registerRoutes(mux *http.ServeMux) {
+func (a *App) registerRoutes(mux *http.ServeMux) error {
 	mux.HandleFunc("/ping", a.handlePing)
 	mux.HandleFunc("/echo", a.handleEcho)
+
+	// Initialize Couchbase DataStore
+	ds, err := db.NewDataStore()
+	if err != nil {
+		return err
+	}
+
+	// Setup the API router
+	ginRouter := api.SetupRouter(ds)
+
+	// Preserve the /api/v2 prefix since Gin routes are registered under that group.
+	mux.Handle("/api/v2/", ginRouter)
+
+	return nil
 }
