@@ -2,15 +2,16 @@ package db
 
 import (
 	"fmt"
+	"context"
 
 	"github.com/couchbase/gocb/v2"
 )
 
 // queryRows executes a query and reads all rows into a slice, with consistent error handling
-func queryRows[T any](cluster *gocb.Cluster, query string, params map[string]interface{}, rowErrorMsg string) ([]T, error) {
+func queryRows[T any](cluster *gocb.Cluster, query string, params map[string]interface{}, rowErrorMsg string, c context.Context) ([]T, error) {
 	var queryOpts *gocb.QueryOptions
 	if params != nil {
-		queryOpts = &gocb.QueryOptions{NamedParameters: params}
+		queryOpts = &gocb.QueryOptions{NamedParameters: params, Context: c}
 	}
 
 	results, err := cluster.Query(query, queryOpts)

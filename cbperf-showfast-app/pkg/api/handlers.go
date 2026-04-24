@@ -4,11 +4,16 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"context"
 
 	"github.com/cbperf/showfast/pkg/db"
 	"github.com/cbperf/showfast/pkg/models"
 	"github.com/gin-gonic/gin"
 )
+
+func extractContextFromGin(c *gin.Context) context.Context {
+	return c.Request.Context()
+}
 
 // parses the url query param for anything starting with "tags.""
 func extractTagFromQuery(c *gin.Context) map[string]string {
@@ -23,7 +28,7 @@ func extractTagFromQuery(c *gin.Context) map[string]string {
 }
 
 func GetBuildsV2(c *gin.Context, ds *db.DataStore) {
-	builds, err := ds.GetBuilds()
+	builds, err := ds.GetBuilds(c)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -34,8 +39,9 @@ func GetBuildsV2(c *gin.Context, ds *db.DataStore) {
 func GetMetricsV2(c *gin.Context, ds *db.DataStore) {
 	component := c.Query("component")
 	tags := extractTagFromQuery(c)
+	ctx := extractContextFromGin(c)
 
-	metrics, err := ds.GetMetrics(component, tags)
+	metrics, err := ds.GetMetrics(component, tags, ctx)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -47,8 +53,9 @@ func GetMetricsV2(c *gin.Context, ds *db.DataStore) {
 func GetBenchmarksV2(c *gin.Context, ds *db.DataStore) {
 	component := c.Query("component")
 	tags := extractTagFromQuery(c)
+	ctx := extractContextFromGin(c)
 
-	benchmarks, err := ds.GetBenchmarks(component, tags)
+	benchmarks, err := ds.GetBenchmarks(component, tags, ctx)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -63,7 +70,8 @@ func GetTimelineV2(c *gin.Context, ds *db.DataStore) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "metric_id parameter is required"})
 		return
 	}
-	timeline, err := ds.GetTimeline(metricID)
+	ctx := extractContextFromGin(c)
+	timeline, err := ds.GetTimeline(metricID, ctx)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -79,7 +87,8 @@ func GetRunsV2(c *gin.Context, ds *db.DataStore) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "metric_id and build parameters are required"})
 		return
 	}
-	runs, err := ds.GetAllRuns(metricID, build)
+	ctx := extractContextFromGin(c)
+	runs, err := ds.GetAllRuns(metricID, build, ctx)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -105,7 +114,8 @@ func CompareV2(c *gin.Context, ds *db.DataStore) {
 	}
 
 	tags := extractTagFromQuery(c)
-	benchmarks, err := ds.GetBenchmarks(component, tags)
+	ctx := extractContextFromGin(c)
+	benchmarks, err := ds.GetBenchmarks(component, tags, ctx)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -149,7 +159,8 @@ func CompareV2(c *gin.Context, ds *db.DataStore) {
 }
 
 func GetFiltersV2(c *gin.Context, ds *db.DataStore) {
-	filters, err := ds.GetFilters()
+	ctx := extractContextFromGin(c)
+	filters, err := ds.GetFilters(ctx)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -164,7 +175,8 @@ func AddMetricV2(c *gin.Context, ds *db.DataStore) {
 		return
 	}
 
-	if err := ds.AddMetric(metric); err != nil {
+	ctx := extractContextFromGin(c)
+	if err := ds.AddMetric(metric, ctx); err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
@@ -177,8 +189,8 @@ func AddClusterV2(c *gin.Context, ds *db.DataStore) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	if err := ds.AddCluster(cluster); err != nil {
+	ctx := extractContextFromGin(c)
+	if err := ds.AddCluster(cluster, ctx); err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
@@ -191,8 +203,8 @@ func AddBenchmarkV2(c *gin.Context, ds *db.DataStore) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	if err := ds.AddBenchmark(benchmark); err != nil {
+	ctx := extractContextFromGin(c)
+	if err := ds.AddBenchmark(benchmark, ctx); err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
@@ -206,7 +218,8 @@ func UpdateBenchmarkV2(c *gin.Context, ds *db.DataStore) {
 		return
 	}
 
-	if err := ds.ToggleBenchmarkHidden(benchmarkID); err != nil {
+	ctx := extractContextFromGin(c)
+	if err := ds.ToggleBenchmarkHidden(benchmarkID, ctx); err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
@@ -220,7 +233,8 @@ func DeleteBenchmarkV2(c *gin.Context, ds *db.DataStore) {
 		return
 	}
 
-	if err := ds.DeleteBenchmark(benchmarkID); err != nil {
+	ctx := extractContextFromGin(c)
+	if err := ds.DeleteBenchmark(benchmarkID, ctx); err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}

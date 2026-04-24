@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/cbperf/showfast/pkg/db"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/resource/httpadapter"
@@ -22,11 +23,17 @@ var (
 // App is an example app plugin with a backend which can respond to data queries.
 type App struct {
 	backend.CallResourceHandler
+	*db.DataStore
 }
 
 // NewApp creates a new example *App instance.
 func NewApp(_ context.Context, _ backend.AppInstanceSettings) (instancemgmt.Instance, error) {
 	var app App
+	var err error
+	app.DataStore, err = db.NewDataStore()
+	if err != nil {
+		return nil, err
+	}
 
 	// Use a httpadapter (provided by the SDK) for resource calls. This allows us
 	// to use a *http.ServeMux for resource calls, so we can map multiple routes
@@ -43,7 +50,8 @@ func NewApp(_ context.Context, _ backend.AppInstanceSettings) (instancemgmt.Inst
 // Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
 // created.
 func (a *App) Dispose() {
-	// cleanup
+	// cleanup\
+	a.DataStore.GetCluster().Close(nil)
 }
 
 // CheckHealth handles health checks sent from Grafana to the plugin.

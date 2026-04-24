@@ -1,10 +1,8 @@
 package db
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/couchbase/gocb/v2"
@@ -19,43 +17,38 @@ var couchbaseBuckets = []string{"benchmarks", "metrics", "clusters"}
 
 const couchbaseReadyTimeout = 30 * time.Second
 
-func loadEnvFromFile(path string) {
-	file, err := os.Open(path)
-	if err != nil {
-		return
-	}
-	defer file.Close()
+// func loadEnvFromFile(path string) {
+// 	file, err := os.Open(path)
+// 	if err != nil {
+// 		return
+// 	}
+// 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
+// 	scanner := bufio.NewScanner(file)
+// 	for scanner.Scan() {
+// 		line := strings.TrimSpace(scanner.Text())
+// 		if line == "" || strings.HasPrefix(line, "#") {
+// 			continue
+// 		}
 
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
+// 		parts := strings.SplitN(line, "=", 2)
+// 		if len(parts) != 2 {
+// 			continue
+// 		}
 
-		key := strings.TrimSpace(parts[0])
-		value := strings.TrimSpace(parts[1])
-		if key == "" || value == "" {
-			continue
-		}
+// 		key := strings.TrimSpace(parts[0])
+// 		value := strings.TrimSpace(parts[1])
+// 		if key == "" || value == "" {
+// 			continue
+// 		}
 
-		if _, exists := os.LookupEnv(key); !exists {
-			_ = os.Setenv(key, value)
-		}
-	}
-}
+// 		if _, exists := os.LookupEnv(key); !exists {
+// 			_ = os.Setenv(key, value)
+// 		}
+// 	}
+// }
 
 func NewDataStore() (*DataStore, error) {
-	// Grafana may run plugin subprocesses with a restricted environment.
-	// Fall back to local env files for development.
-	loadEnvFromFile(".env")
-	loadEnvFromFile("/root/cbperf-showfast-app/.env")
-
 	connString := os.Getenv("CB_CONN_STRING")
 	username := os.Getenv("CB_USERNAME")
 	password := os.Getenv("CB_PASSWORD")
@@ -75,6 +68,7 @@ func NewDataStore() (*DataStore, error) {
 	}
 
 	if err := cluster.WaitUntilReady(couchbaseReadyTimeout, nil); err != nil {
+		cluster.Close(nil)
 		return nil, fmt.Errorf("Failed to wait for Couchbase cluster readiness: %v", err)
 	}
 
