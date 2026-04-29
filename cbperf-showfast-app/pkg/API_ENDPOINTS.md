@@ -210,8 +210,8 @@ Error behavior:
 ### Dynamic tag filters
 - Any query parameter starting with `tag.` is treated as a tag filter.
 - Example:
-  - `/api/v2/metrics?component=kv&tag.durability=majority&tag.resident_ratio=90`
+  - `/metrics?component=kv&tag.durability=majority&tag.resident_ratio=90`
 
 ### Administrative benchmark actions
 - The current PATCH and DELETE benchmark endpoints use query-string id:
-  - `/api/v2/benchmarks?id=<benchmark-id>`
+  - `/benchmarks?id=<benchmark-id>`

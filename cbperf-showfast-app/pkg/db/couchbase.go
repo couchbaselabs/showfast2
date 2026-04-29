@@ -2,7 +2,6 @@ package db
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/couchbase/gocb/v2"
@@ -17,44 +16,9 @@ var couchbaseBuckets = []string{"benchmarks", "metrics", "clusters"}
 
 const couchbaseReadyTimeout = 30 * time.Second
 
-// func loadEnvFromFile(path string) {
-// 	file, err := os.Open(path)
-// 	if err != nil {
-// 		return
-// 	}
-// 	defer file.Close()
-
-// 	scanner := bufio.NewScanner(file)
-// 	for scanner.Scan() {
-// 		line := strings.TrimSpace(scanner.Text())
-// 		if line == "" || strings.HasPrefix(line, "#") {
-// 			continue
-// 		}
-
-// 		parts := strings.SplitN(line, "=", 2)
-// 		if len(parts) != 2 {
-// 			continue
-// 		}
-
-// 		key := strings.TrimSpace(parts[0])
-// 		value := strings.TrimSpace(parts[1])
-// 		if key == "" || value == "" {
-// 			continue
-// 		}
-
-// 		if _, exists := os.LookupEnv(key); !exists {
-// 			_ = os.Setenv(key, value)
-// 		}
-// 	}
-// }
-
-func NewDataStore() (*DataStore, error) {
-	connString := os.Getenv("CB_CONN_STRING")
-	username := os.Getenv("CB_USERNAME")
-	password := os.Getenv("CB_PASSWORD")
-
+func NewDataStore(connString, username, password string) (*DataStore, error) {
 	if connString == "" || username == "" || password == "" {
-		return nil, fmt.Errorf("Missing environment variables. Currently: CB_CONN_STRING=%s, CB_USERNAME=%s, CB_PASSWORD=%s", connString, username, password)
+		return nil, fmt.Errorf("Missing Couchbase credentials. Currently: CB_CONN_STRING=%s, CB_USERNAME=%s, CB_PASSWORD=%s", connString, username, password)
 	}
 
 	cluster, err := gocb.Connect(connString, gocb.ClusterOptions{

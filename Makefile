@@ -9,8 +9,7 @@ build-plugin:
 
 build-docker: build-plugin
 	@cd cbperf-showfast-app && \
-	npm run server && \
-	docker compose --env-file .env up --build  2>&1 1>/dev/null -d
+ 	docker compose --env-file .env up --build -d
 
 # Reload Grafana so updated plugin artifacts are reloaded from the bind mount
 reload-plugin:

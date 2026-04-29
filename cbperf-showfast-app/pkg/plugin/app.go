@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/cbperf/showfast/pkg/db"
@@ -27,10 +28,20 @@ type App struct {
 }
 
 // NewApp creates a new example *App instance.
-func NewApp(_ context.Context, _ backend.AppInstanceSettings) (instancemgmt.Instance, error) {
+func NewApp(_ context.Context, settings backend.AppInstanceSettings) (instancemgmt.Instance, error) {
 	var app App
 	var err error
-	app.DataStore, err = db.NewDataStore()
+
+	var jsonData struct {
+		CBConnString string `json:"cbConnString"`
+		CBUsername   string `json:"cbUsername"`
+	}
+	if len(settings.JSONData) > 0 {
+		_ = json.Unmarshal(settings.JSONData, &jsonData)
+	}
+	password := settings.DecryptedSecureJSONData["cbPassword"]
+
+	app.DataStore, err = db.NewDataStore(jsonData.CBConnString, jsonData.CBUsername, password)
 	if err != nil {
 		return nil, err
 	}

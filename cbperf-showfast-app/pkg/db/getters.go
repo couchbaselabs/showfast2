@@ -48,12 +48,7 @@ func (ds *DataStore) GetMetrics(component string, tags map[string]string, c cont
 
 func (ds *DataStore) GetBenchmarks(component string, tags map[string]string, c context.Context) ([]models.Benchmark, error) {
 	var benchmarks []models.Benchmark
-	queryStr := `
-		SELECT b.build, b.id, b.hidden, b.metric, b.value 
-		FROM metrics m 
-		JOIN benchmarks b ON KEY b.metric FOR m 
-		WHERE m.component = $component AND b.hidden = False
-	`
+	queryStr := "SELECT b.`build`, b.id, b.hidden, b.metric, b.`value` \n\t\tFROM benchmarks b \n\t\tJOIN metrics m ON KEYS b.metric \n\t\tWHERE m.component = $component AND b.hidden = False"
 	params := map[string]interface{}{
 		"component": component,
 	}
@@ -83,21 +78,12 @@ func (ds *DataStore) GetBenchmarks(component string, tags map[string]string, c c
 }
 
 func (ds *DataStore) GetBuilds(c context.Context) ([]string, error) {
-	query := `
-		SELECT DISTINCT RAW b.build
-		FROM benchmarks b
-		WHERE b.hidden = False
-		ORDER BY SPLIT(b.build, "-")[0] DESC, SPLIT(b.build, "-")[1] DESC
-	`
+	query := "\n\t\tSELECT DISTINCT RAW b.`build`\n\t\tFROM benchmarks b\n\t\tWHERE b.hidden = False\n\t\tORDER BY SPLIT(b.`build`, \"-\")[0] DESC, SPLIT(b.`build`, \"-\")[1] DESC\n\t"
 	return queryRows[string](ds.cluster, query, nil, "build", c)
 }
 
 func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]interface{}, error) {
-	query := `
-		SELECT RAW [b.build, b.value] FROM benchmarks b
-		WHERE b.metric = $metricID AND b.hidden = False
-		ORDER BY SPLIT(b.build, "-")[0] DESC, SPLIT(b.build, "-")[1] DESC
-	`
+	query := "\n\t\tSELECT RAW [b.`build`, b.value] FROM benchmarks b\n\t\tWHERE b.metric = $metricID AND b.hidden = False\n\t\tORDER BY SPLIT(b.`build`, \"-\")[0] DESC, SPLIT(b.`build`, \"-\")[1] DESC\n\t"
 	params := map[string]interface{}{
 		"metricID": metricID,
 	}
@@ -109,12 +95,7 @@ func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]inter
 }
 
 func (ds *DataStore) GetAllRuns(metricID string, build string, c context.Context) ([]models.Run, error) {
-	query := `
-		SELECT b.*
-		FROM benchmarks b
-		WHERE b.metric = $metricID AND b.build = $build
-		ORDER BY b.dateTime DESC
-	`
+	query := "\n\t\tSELECT b.*\n\t\tFROM benchmarks b\n\t\tWHERE b.metric = $metricID AND b.`build` = $build\n\t\tORDER BY b.dateTime DESC\n\t"
 	params := map[string]interface{}{
 		"metricID": metricID,
 		"build":    build,
@@ -146,14 +127,14 @@ func (ds *DataStore) GetFilters(c context.Context) (*FilterResponse, error) {
 	}
 
 	tagQuery := `
-		SELECT k as key, v as value
+		SELECT k, v 
 		FROM metrics m
-		UNNEST OBJECT_ENTRIES(m.tags) AS entry
+		UNNEST OBJECT_PAIRS(m.tags) AS entry
 		LET k = entry.name,
 		    v = entry.val
 		WHERE m.hidden = False
 		AND m.tags IS NOT NULL
-		GROUP BY key, value
+		GROUP BY k, v
 	`
 	tagRows, err := queryRows[tagDef](ds.cluster, tagQuery, nil, "tag", c)
 	if err != nil {
