@@ -46,9 +46,7 @@ func (a *App) registerRoutes(mux *http.ServeMux) error {
 
 	// Setup the API router
 	ginRouter := api.SetupRouter(a.DataStore)
-
-	// Preserve the /api/v2 prefix since Gin routes are registered under that group.
-	mux.Handle("/api/v2/", ginRouter)
+	mux.Handle("/", ginRouter)
 
 	return nil
 }
