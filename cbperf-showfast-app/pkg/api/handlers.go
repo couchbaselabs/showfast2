@@ -1,10 +1,9 @@
 package api
 
 import (
-	"net/http"
-	"sort"
-	"strings"
 	"context"
+	"net/http"
+	"strings"
 
 	"github.com/cbperf/showfast/pkg/db"
 	"github.com/cbperf/showfast/pkg/models"
@@ -15,13 +14,25 @@ func extractContextFromGin(c *gin.Context) context.Context {
 	return c.Request.Context()
 }
 
-// parses the url query param for anything starting with "tags.""
-func extractTagFromQuery(c *gin.Context) map[string]string {
-	tags := make(map[string]string)
+// parses url query params like tag.foo=v1,v2 or tag.foo=v1&tag.foo=v2
+func extractTagsFromQuery(c *gin.Context) map[string][]string {
+	tags := make(map[string][]string)
 	for key, values := range c.Request.URL.Query() {
-		if strings.HasPrefix(key, "tag.") && len(values) > 0 {
+		if strings.HasPrefix(key, "tag.") {
 			tagKey := strings.TrimPrefix(key, "tag.")
-			tags[tagKey] = values[0]
+			normalized := make([]string, 0)
+			for _, item := range values {
+				for _, part := range strings.Split(item, ",") {
+					v := strings.TrimSpace(part)
+					v = strings.Trim(v, `"`)
+					if v != "" {
+						normalized = append(normalized, v)
+					}
+				}
+			}
+			if len(normalized) > 0 {
+				tags[tagKey] = normalized
+			}
 		}
 	}
 	return tags
@@ -37,11 +48,11 @@ func GetBuildsV2(c *gin.Context, ds *db.DataStore) {
 }
 
 func GetMetricsV2(c *gin.Context, ds *db.DataStore) {
-	component := c.Query("component")
-	tags := extractTagFromQuery(c)
+	components := queryValues(c, "component")
+	tags := extractTagsFromQuery(c)
 	ctx := extractContextFromGin(c)
 
-	metrics, err := ds.GetMetrics(component, tags, ctx)
+	metrics, err := ds.GetMetrics(components, tags, ctx)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -51,11 +62,11 @@ func GetMetricsV2(c *gin.Context, ds *db.DataStore) {
 }
 
 func GetBenchmarksV2(c *gin.Context, ds *db.DataStore) {
-	component := c.Query("component")
-	tags := extractTagFromQuery(c)
+	components := queryValues(c, "component")
+	tags := extractTagsFromQuery(c)
 	ctx := extractContextFromGin(c)
 
-	benchmarks, err := ds.GetBenchmarks(component, tags, ctx)
+	benchmarks, err := ds.GetBenchmarks(components, tags, ctx)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -95,67 +106,6 @@ func GetRunsV2(c *gin.Context, ds *db.DataStore) {
 	}
 
 	c.IndentedJSON(http.StatusOK, runs)
-}
-
-type buildComparison struct {
-	Metric string   `json:"metric"`
-	Build1 *float64 `json:"build1,omitempty"`
-	Build2 *float64 `json:"build2,omitempty"`
-	Delta  *float64 `json:"delta,omitempty"`
-}
-
-func CompareV2(c *gin.Context, ds *db.DataStore) {
-	build1 := c.Query("build1")
-	build2 := c.Query("build2")
-	component := c.Query("component")
-	if build1 == "" || build2 == "" || component == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "build1, build2, and component parameters are required"})
-		return
-	}
-
-	tags := extractTagFromQuery(c)
-	ctx := extractContextFromGin(c)
-	benchmarks, err := ds.GetBenchmarks(component, tags, ctx)
-	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-		return
-	}
-
-	byMetric := make(map[string]*buildComparison)
-	for _, benchmark := range benchmarks {
-		if benchmark.Build != build1 && benchmark.Build != build2 {
-			continue
-		}
-
-		comparison, ok := byMetric[benchmark.Metric]
-		if !ok {
-			comparison = &buildComparison{Metric: benchmark.Metric}
-			byMetric[benchmark.Metric] = comparison
-		}
-
-		value := benchmark.Value
-		if benchmark.Build == build1 {
-			comparison.Build1 = &value
-		}
-		if benchmark.Build == build2 {
-			comparison.Build2 = &value
-		}
-	}
-
-	result := make([]buildComparison, 0, len(byMetric))
-	for _, comparison := range byMetric {
-		if comparison.Build1 != nil && comparison.Build2 != nil {
-			delta := *comparison.Build2 - *comparison.Build1
-			comparison.Delta = &delta
-		}
-		result = append(result, *comparison)
-	}
-
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Metric < result[j].Metric
-	})
-
-	c.IndentedJSON(http.StatusOK, result)
 }
 
 func GetFiltersV2(c *gin.Context, ds *db.DataStore) {
@@ -260,7 +210,3 @@ func DeleteBenchmarkV2(c *gin.Context, ds *db.DataStore) {
 
 // 	c.IndentedJSON(http.StatusOK, metrics)
 // }
-
-type Filters struct {
-	
-}

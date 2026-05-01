@@ -13,7 +13,6 @@ func SetupRouter(ds *db.DataStore) *gin.Engine {
 	router.GET("/benchmarks", func(c *gin.Context) { GetBenchmarksV2(c, ds) })
 	router.GET("/timeline", func(c *gin.Context) { GetTimelineV2(c, ds) })
 	router.GET("/runs", func(c *gin.Context) { GetRunsV2(c, ds) })
-	router.GET("/compare", func(c *gin.Context) { CompareV2(c, ds) })
 	router.GET("/filters", func(c *gin.Context) { GetFiltersV2(c, ds) })
 
 	router.POST("/metrics", func(c *gin.Context) { AddMetricV2(c, ds) })

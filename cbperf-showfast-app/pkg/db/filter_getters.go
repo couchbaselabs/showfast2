@@ -13,14 +13,6 @@ type FilterOptions struct {
 	OS            []string
 }
 
-func addFilterCondition(query string, params map[string]interface{}, fieldName string, paramName string, values []string) (string, map[string]interface{}) {
-	if len(values) > 0 {
-		query += fmt.Sprintf(` AND %s IN $%s`, fieldName, paramName)
-		params[paramName] = values
-	}
-	return query, params
-}
-
 // getMetricsDimension is a generic getter for metrics dimensions (component, category, subCategory)
 func (ds *DataStore) getMetricsDimension(dimension string, opts FilterOptions, c context.Context) ([]string, error) {
 	var filterMap map[string][]string

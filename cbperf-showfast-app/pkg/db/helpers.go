@@ -1,8 +1,8 @@
 package db
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 
 	"github.com/couchbase/gocb/v2"
 )
@@ -35,20 +35,31 @@ func queryRows[T any](cluster *gocb.Cluster, query string, params map[string]int
 	return rows, nil
 }
 
-func buildTagFilters(tags map[string]string) (string, map[string]interface{}) {
+func buildTagFilters(tags map[string][]string) (string, map[string]interface{}) {
 	clause := ""
 	params := make(map[string]interface{})
 
 	i := 0
-	for k, v := range tags {
+	for k, values := range tags {
 		if !validTagKey.MatchString(k) {
 			continue
 		}
+		if len(values) == 0 {
+			continue
+		}
 		paramName := fmt.Sprintf("tagVal%d", i)
-		clause += fmt.Sprintf(` AND m.tags.%s = $%s`, k, paramName)
-		params[paramName] = v
+		clause += fmt.Sprintf(` AND m.tags.%s IN $%s`, k, paramName)
+		params[paramName] = values
 		i++
 	}
 
 	return clause, params
+}
+
+func addFilterCondition(query string, params map[string]interface{}, fieldName string, paramName string, values []string) (string, map[string]interface{}) {
+	if len(values) > 0 {
+		query += fmt.Sprintf(` AND %s IN $%s`, fieldName, paramName)
+		params[paramName] = values
+	}
+	return query, params
 }

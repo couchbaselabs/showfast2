@@ -1,191 +1,218 @@
-# Showfast Backend API (v2)
+# Showfast Backend API
 
-Base path: `/api/v2`
+Base path:
+- `/api/plugins/cbperf-showfast-app/resources`
 
-This document lists all currently registered endpoints in the backend and describes what each one does.
+This document reflects the currently registered routes in `pkg/api/router.go` and how query parsing is implemented in `pkg/api/handlers.go` and `pkg/api/filter_handlers.go`.
 
 ## GET Endpoints
 
 ### GET /builds
 Purpose:
-- Returns all build versions that have non-hidden benchmark data.
+- Returns distinct non-hidden build versions from benchmark documents.
 
-Typical response:
-- `200 OK` with `[]string` of build names.
+Response:
+- `200 OK` with `[]string`.
 
-Error behavior:
-- `500 Internal Server Error` if build query fails.
+Errors:
+- `500 Internal Server Error` on query failures.
 
 ### GET /metrics
 Purpose:
-- Returns metric definitions filtered by optional query params.
+- Returns metric documents filtered by optional components and dynamic tags.
 
 Supported query params:
-- `component=<string>` optional component filter.
-- `tag.<key>=<value>` optional dynamic tag filters; can be repeated for multiple tags.
+- `component=<value>`: optional, supports repeated and comma-separated values.
+- `tag.<key>=<value>`: optional dynamic tag filters.
+  - each tag key supports repeated and comma-separated values.
 
-Notes:
-- Tag keys are interpreted from query params prefixed with `tag.`.
-- All provided tag filters are combined as intersection filters.
+Examples:
+- `/metrics?component=kv&component=n1ql`
+- `/metrics?component=kv,n1ql`
+- `/metrics?component=kv&tag.durability=none,majority`
 
-Typical response:
+Response:
 - `200 OK` with `[]Metric`.
 
-Error behavior:
-- `500 Internal Server Error` if metric query fails.
+Errors:
+- `500 Internal Server Error` on query failures.
 
 ### GET /benchmarks
 Purpose:
-- Returns benchmark rows filtered by component and optional tag filters.
+- Returns benchmark documents filtered by optional components and dynamic tags.
 
 Supported query params:
-- `component=<string>` component filter.
-- `tag.<key>=<value>` optional dynamic tag filters; can be repeated.
+- `component=<value>`: optional, supports repeated and comma-separated values.
+- `tag.<key>=<value>`: optional dynamic tag filters.
+  - each tag key supports repeated and comma-separated values.
 
-Typical response:
+Examples:
+- `/benchmarks?component=kv&component=n1ql`
+- `/benchmarks?component=kv,n1ql&tag.resident_ratio=90,100`
+
+Response:
 - `200 OK` with `[]Benchmark`.
 
-Error behavior:
-- `500 Internal Server Error` if benchmark query fails.
+Errors:
+- `500 Internal Server Error` on query failures.
 
 ### GET /timeline
 Purpose:
-- Returns historical benchmark values for a specific metric.
+- Returns timeline points for a metric as `[build, value]` pairs.
 
 Required query params:
-- `metric_id=<string>` metric identifier.
+- `metric_id=<string>`
 
-Typical response:
-- `200 OK` with timeline data as `[][]interface{}`.
+Response:
+- `200 OK` with `[][]interface{}`.
 
 Validation:
-- `400 Bad Request` if `metric_id` is missing.
+- `400 Bad Request` when `metric_id` is missing.
 
-Error behavior:
-- `500 Internal Server Error` if timeline query fails.
+Errors:
+- `500 Internal Server Error` on query failures.
 
 ### GET /runs
 Purpose:
-- Returns detailed run records for a specific metric/build combination.
+- Returns all run documents for a metric/build pair.
 
 Required query params:
-- `metric_id=<string>` metric identifier.
-- `build=<string>` build identifier.
+- `metric_id=<string>`
+- `build=<string>`
 
-Typical response:
+Response:
 - `200 OK` with `[]Run`.
 
 Validation:
-- `400 Bad Request` if `metric_id` or `build` is missing.
+- `400 Bad Request` when required params are missing.
 
-Error behavior:
-- `500 Internal Server Error` if run query fails.
-
-### GET /compare
-Purpose:
-- Compares benchmark values between two builds for a component (and optional tags).
-
-Required query params:
-- `build1=<string>` first build.
-- `build2=<string>` second build.
-- `component=<string>` component to compare.
-
-Optional query params:
-- `tag.<key>=<value>` optional tag filters.
-
-Typical response:
-- `200 OK` with a list of comparison objects:
-  - `metric`: metric id
-  - `build1`: value for build1 if present
-  - `build2`: value for build2 if present
-  - `delta`: `build2 - build1` when both values exist
-
-Validation:
-- `400 Bad Request` if `build1`, `build2`, or `component` is missing.
-
-Error behavior:
-- `500 Internal Server Error` if benchmark query fails.
+Errors:
+- `500 Internal Server Error` on query failures.
 
 ### GET /filters
 Purpose:
-- Returns available UI filter values derived from metrics.
+- Returns dynamic tag options derived from metrics.
 
-Typical response:
-- `200 OK` with:
-  - `components`: list of distinct component values
-  - `tags`: map of tag key to distinct values
+Response:
+- `200 OK` with `map[string][]string`.
+  - key: tag key
+  - value: distinct values for that tag key
 
-Error behavior:
-- `500 Internal Server Error` if filter query fails.
+Errors:
+- `500 Internal Server Error` on query failures.
+
+## GET /utils Endpoints
+
+All `/utils/*` endpoints support repeated and comma-separated query values via shared `queryValues` parsing.
+
+### GET /utils/components
+Purpose:
+- Returns distinct component values, filtered by optional category/subcategory/cluster/os constraints.
+
+Supported query params:
+- `category`, `subcategory`, `cluster`, `os`
+
+### GET /utils/categories
+Purpose:
+- Returns distinct category values, filtered by optional component/subcategory/cluster/os constraints.
+
+Supported query params:
+- `component`, `subcategory`, `cluster`, `os`
+
+### GET /utils/subcategories
+Purpose:
+- Returns distinct subCategory values, filtered by optional component/category/cluster/os constraints.
+
+Supported query params:
+- `component`, `category`, `cluster`, `os`
+
+### GET /utils/clusters
+Purpose:
+- Returns distinct cluster names with optional filtering.
+
+Supported query params:
+- `component`, `category`, `subcategory`, `os`
+
+### GET /utils/os
+Purpose:
+- Returns distinct OS values with optional filtering.
+
+Supported query params:
+- `component`, `category`, `subcategory`, `cluster`
+
+Response for all `/utils/*`:
+- `200 OK` with `[]string`.
+
+Errors for all `/utils/*`:
+- `500 Internal Server Error` with `{ "error": "..." }`.
 
 ## POST Endpoints
 
 ### POST /metrics
 Purpose:
-- Creates or updates a metric document (upsert by `metric.id`).
+- Upserts a metric document by metric id.
 
 Request body:
-- JSON object matching `Metric`.
+- JSON matching `Metric`.
 
-Typical response:
+Response:
 - `201 Created` with `{ "id": "<metric-id>" }`.
 
 Validation:
-- `400 Bad Request` if JSON binding fails.
+- `400 Bad Request` on JSON binding errors.
 
-Error behavior:
-- `500 Internal Server Error` if persistence fails.
+Errors:
+- `500 Internal Server Error` on persistence failures.
 
 ### POST /clusters
 Purpose:
-- Creates or updates a cluster profile document (upsert by `cluster.name`).
+- Upserts a cluster document by cluster name.
 
 Request body:
-- JSON object matching `Cluster`.
+- JSON matching `Cluster`.
 
-Typical response:
+Response:
 - `201 Created` with `{ "name": "<cluster-name>" }`.
 
 Validation:
-- `400 Bad Request` if JSON binding fails.
+- `400 Bad Request` on JSON binding errors.
 
-Error behavior:
-- `500 Internal Server Error` if persistence fails.
+Errors:
+- `500 Internal Server Error` on persistence failures.
 
 ### POST /benchmarks
 Purpose:
-- Inserts a benchmark document.
-- Before insert, existing non-hidden benchmarks with the same metric/build are marked hidden.
+- Inserts a benchmark document and handles existing metric/build visibility logic in storage layer.
 
 Request body:
-- JSON object matching `Benchmark`.
+- JSON matching `Benchmark`.
 
-Typical response:
+Response:
 - `201 Created` with `{ "id": "<benchmark-id>" }`.
 
 Validation:
-- `400 Bad Request` if JSON binding fails.
+- `400 Bad Request` on JSON binding errors.
 
-Error behavior:
-- `500 Internal Server Error` if lookup/update/insert fails.
+Errors:
+- `500 Internal Server Error` on persistence failures.
 
 ## PATCH Endpoints
 
 ### PATCH /benchmarks
 Purpose:
-- Toggles the `hidden` state for a benchmark.
+- Toggles benchmark hidden state by id.
 
 Required query params:
-- `id=<string>` benchmark document id.
+- `id=<string>`
 
-Typical response:
+Response:
 - `200 OK` with `{ "status": "updated" }`.
 
 Validation:
-- `400 Bad Request` if `id` is missing.
+- `400 Bad Request` when `id` is missing.
 
-Error behavior:
-- `500 Internal Server Error` if lookup/update fails.
+Errors:
+- `500 Internal Server Error` on update failures.
 
 ## DELETE Endpoints
 
@@ -194,24 +221,31 @@ Purpose:
 - Deletes a benchmark by id.
 
 Required query params:
-- `id=<string>` benchmark document id.
+- `id=<string>`
 
-Typical response:
+Response:
 - `200 OK` with `{ "status": "deleted" }`.
 
 Validation:
-- `400 Bad Request` if `id` is missing.
+- `400 Bad Request` when `id` is missing.
 
-Error behavior:
-- `500 Internal Server Error` if delete fails.
+Errors:
+- `500 Internal Server Error` on delete failures.
 
 ## Query String Conventions
 
-### Dynamic tag filters
-- Any query parameter starting with `tag.` is treated as a tag filter.
-- Example:
-  - `/metrics?component=kv&tag.durability=majority&tag.resident_ratio=90`
+### Array-valued filters
+- For `component`, `category`, `subcategory`, `cluster`, `os`, and dynamic `tag.<key>` values:
+  - repeated form is supported: `?component=kv&component=n1ql`
+  - comma-separated form is supported: `?component=kv,n1ql`
+  - quoted values are normalized by the parser.
+
+### Dynamic tags
+- Any key prefixed by `tag.` is interpreted as a tag filter.
+- Examples:
+  - `/metrics?tag.durability=none,majority`
+  - `/benchmarks?component=kv&tag.resident_ratio=90&tag.resident_ratio=100`
 
 ### Administrative benchmark actions
-- The current PATCH and DELETE benchmark endpoints use query-string id:
+- Patch and delete use query-string id:
   - `/benchmarks?id=<benchmark-id>`
