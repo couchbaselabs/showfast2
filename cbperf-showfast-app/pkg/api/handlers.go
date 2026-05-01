@@ -240,3 +240,27 @@ func DeleteBenchmarkV2(c *gin.Context, ds *db.DataStore) {
 	}
 	c.IndentedJSON(http.StatusOK, gin.H{"status": "deleted"})
 }
+
+// func GetFilteredMetrics(c *gin.Context, ds *db.DataStore) {
+// 	extractedComponent := c.Query("component")
+// 	extractedCategory := c.Query("category")
+// 	extractedSubcategory := c.Query("subcategory")
+// 	extractedCluster := c.Query("cluster")
+// 	extractedOS := c.Query("os")
+// 	extractedBuild := c.Query("build")
+
+// 	tags := extractTagFromQuery(c)
+// 	ctx := extractContextFromGin(c)
+
+// 	metrics, err := ds.GetFilteredMetrics(tags, ctx)
+// 	if err != nil {
+// 		c.AbortWithError(http.StatusInternalServerError, err)
+// 		return
+// 	}
+
+// 	c.IndentedJSON(http.StatusOK, metrics)
+// }
+
+type Filters struct {
+	
+}

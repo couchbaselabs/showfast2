@@ -2,17 +2,14 @@ package db
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 
 	"github.com/cbperf/showfast/pkg/models"
-	"github.com/couchbase/gocb/v2"
 )
 
 var validTagKey = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
 func (ds *DataStore) GetMetrics(component string, tags map[string]string, c context.Context) ([]models.Metric, error) {
-	var metrics []models.Metric
 	queryStr := `SELECT m.* FROM metrics m WHERE m.hidden = False`
 	params := make(map[string]interface{})
 
@@ -27,27 +24,10 @@ func (ds *DataStore) GetMetrics(component string, tags map[string]string, c cont
 		params[k] = v
 	}
 	queryStr += ` ORDER BY m.category`
-	results, err := ds.cluster.Query(queryStr, &gocb.QueryOptions{NamedParameters: params, Context: c})
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %v", err)
-	}
-	defer results.Close()
-
-	for results.Next() {
-		var row models.Metric
-		if err := results.Row(&row); err == nil {
-			metrics = append(metrics, row)
-		}
-	}
-	if err := results.Err(); err != nil {
-		return nil, fmt.Errorf("error reading query results: %v", err)
-	}
-
-	return metrics, nil
+	return queryRows[models.Metric](ds.cluster, queryStr, params, "metric", c)
 }
 
 func (ds *DataStore) GetBenchmarks(component string, tags map[string]string, c context.Context) ([]models.Benchmark, error) {
-	var benchmarks []models.Benchmark
 	queryStr := "SELECT b.`build`, b.id, b.hidden, b.metric, b.`value` \n\t\tFROM benchmarks b \n\t\tJOIN metrics m ON KEYS b.metric \n\t\tWHERE m.component = $component AND b.hidden = False"
 	params := map[string]interface{}{
 		"component": component,
@@ -58,23 +38,7 @@ func (ds *DataStore) GetBenchmarks(component string, tags map[string]string, c c
 	for k, v := range tagParams {
 		params[k] = v
 	}
-	results, err := ds.cluster.Query(queryStr, &gocb.QueryOptions{NamedParameters: params, Context: c})
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %v", err)
-	}
-	defer results.Close()
-
-	for results.Next() {
-		var row models.Benchmark
-		if err := results.Row(&row); err == nil {
-			benchmarks = append(benchmarks, row)
-		}
-	}
-	if err := results.Err(); err != nil {
-		return nil, fmt.Errorf("error reading query results: %v", err)
-	}
-
-	return benchmarks, nil
+	return queryRows[models.Benchmark](ds.cluster, queryStr, params, "benchmark", c)
 }
 
 func (ds *DataStore) GetBuilds(c context.Context) ([]string, error) {
@@ -83,7 +47,7 @@ func (ds *DataStore) GetBuilds(c context.Context) ([]string, error) {
 }
 
 func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]interface{}, error) {
-	query := "\n\t\tSELECT RAW [b.`build`, b.value] FROM benchmarks b\n\t\tWHERE b.metric = $metricID AND b.hidden = False\n\t\tORDER BY SPLIT(b.`build`, \"-\")[0] DESC, SPLIT(b.`build`, \"-\")[1] DESC\n\t"
+	query := "\n\t\tSELECT RAW [b.`build`, b.`value`] FROM benchmarks b\n\t\tWHERE b.metric = $metricID AND b.hidden = False\n\t\tORDER BY SPLIT(b.`build`, \"-\")[0] DESC, SPLIT(b.`build`, \"-\")[1] DESC\n\t"
 	params := map[string]interface{}{
 		"metricID": metricID,
 	}
@@ -101,12 +65,6 @@ func (ds *DataStore) GetAllRuns(metricID string, build string, c context.Context
 		"build":    build,
 	}
 	return queryRows[models.Run](ds.cluster, query, params, "run", c)
-}
-
-func (ds *DataStore) GetClusters(name string, c context.Context) ([]models.Cluster, error) {
-	query := `SELECT c.* FROM clusters c WHERE ($name = "" OR c.name = $name)`
-	params := map[string]interface{}{"name": name}
-	return queryRows[models.Cluster](ds.cluster, query, params, "cluster", c)
 }
 
 type FilterResponse struct {
@@ -163,3 +121,7 @@ func (ds *DataStore) GetFilters(c context.Context) (*FilterResponse, error) {
 		Tags:       tags,
 	}, nil
 }
+
+// func (ds *DataStore) GetFilteredMetrics(tags map[string][]string, c context.Context) ([]string, error) {
+
+// }
