@@ -2,8 +2,9 @@ package db
 
 import (
 	"context"
-	"fmt"
 )
+
+const baseQuery = "FROM (SELECT b.`value`, b.`build`, m.`title`, m.component, m.category, m.subCategory, c.os, c.cpu, c.name FROM `benchmarks` as b JOIN `metrics` as m ON b.metric = m.id JOIN `clusters` as c ON m.`cluster` = c.name WHERE b.hidden = false AND m.hidden = false) as subquery "
 
 type FilterOptions struct {
 	Components    []string
@@ -12,89 +13,76 @@ type FilterOptions struct {
 	Clusters      []string
 	OS            []string
 }
+type GenericFilterSpec struct {
+	column string
+	param  string
+	values func(FilterOptions) []string
+}
 
-// getMetricsDimension is a generic getter for metrics dimensions (component, category, subCategory)
-func (ds *DataStore) getMetricsDimension(dimension string, opts FilterOptions, c context.Context) ([]string, error) {
-	var filterMap map[string][]string
-	switch dimension {
-	case "component":
-		filterMap = map[string][]string{
-			"m.category":    opts.Categories,
-			"m.subCategory": opts.Subcategories,
-		}
-	case "category":
-		filterMap = map[string][]string{
-			"m.component":   opts.Components,
-			"m.subCategory": opts.Subcategories,
-		}
-	case "subCategory":
-		filterMap = map[string][]string{
-			"m.component": opts.Components,
-			"m.category":  opts.Categories,
-		}
-	default:
-		return nil, fmt.Errorf("unknown dimension: %s", dimension)
+var GenericFilterSpecs = []GenericFilterSpec{
+	{
+		column: "component",
+		param:  "components",
+		values: func(opts FilterOptions) []string { return opts.Components },
+	},
+	{
+		column: "category",
+		param:  "categories",
+		values: func(opts FilterOptions) []string { return opts.Categories },
+	},
+	{
+		column: "subCategory",
+		param:  "subcategories",
+		values: func(opts FilterOptions) []string { return opts.Subcategories },
+	},
+	{
+		column: "os",
+		param:  "os",
+		values: func(opts FilterOptions) []string { return opts.OS },
+	},
+	{
+		column: "name",
+		param:  "clusters",
+		values: func(opts FilterOptions) []string { return opts.Clusters },
+	},
+}
+
+func (ds *DataStore) GenericFiltering(filter string, opts FilterOptions, c context.Context) ([]string, error) {
+	column, err := normalizeGenericFilterColumn(filter)
+	if err != nil {
+		return nil, err
 	}
 
-	query := fmt.Sprintf(`SELECT DISTINCT RAW m.%s FROM metrics m WHERE m.%s != "" AND m.hidden = False`, dimension, dimension)
+	query := "SELECT DISTINCT RAW subquery." + column + " " + baseQuery + "WHERE subquery." + column + "!= \"\""
 	params := make(map[string]interface{})
 
-	// Apply direct filters
-	for field, values := range filterMap {
-		paramName := field[2:] // strip "m." prefix for param name
-		query, params = addFilterCondition(query, params, field, paramName, values)
+	for _, spec := range GenericFilterSpecs {
+		// Skip self-filtering so the options list for the active dimension can expand.
+		if spec.column == column {
+			continue
+		}
+		query, params = addFilterCondition(query, params, "subquery."+spec.column, spec.param, spec.values(opts))
 	}
-
-	// Cross-table filtering via benchmarks to clusters
-	if len(opts.Clusters) > 0 || len(opts.OS) > 0 {
-		query += " AND m.id IN (SELECT RAW b.metric FROM benchmarks b JOIN clusters c ON KEYS b.`cluster` WHERE TRUE"
-		query, params = addFilterCondition(query, params, "c.name", "clusters", opts.Clusters)
-		query, params = addFilterCondition(query, params, "c.os", "os", opts.OS)
-		query += `)`
-	}
-
-	query += fmt.Sprintf(` ORDER BY m.%s`, dimension)
-	return queryRows[string](ds.cluster, query, params, dimension, c)
+	query += ` ORDER BY subquery.` + column
+	return queryRows[string](ds.cluster, query, params, column, c)
 }
 
 func (ds *DataStore) GetComponents(opts FilterOptions, c context.Context) ([]string, error) {
-	return ds.getMetricsDimension("component", opts, c)
+	return ds.GenericFiltering("component", opts, c)
 }
 
 func (ds *DataStore) GetCategories(opts FilterOptions, c context.Context) ([]string, error) {
-	return ds.getMetricsDimension("category", opts, c)
+	return ds.GenericFiltering("category", opts, c)
 }
 
 func (ds *DataStore) GetSubcategories(opts FilterOptions, c context.Context) ([]string, error) {
-	return ds.getMetricsDimension("subCategory", opts, c)
+	return ds.GenericFiltering("subCategory", opts, c)
 }
 
 func (ds *DataStore) GetOs(opts FilterOptions, c context.Context) ([]string, error) {
-	query := "SELECT DISTINCT RAW c.os FROM `clusters` c WHERE c.os != \"\" AND c.name IN (SELECT DISTINCT RAW m.`cluster` FROM metrics m WHERE m.hidden = False"
-	params := make(map[string]interface{})
-
-	query, params = addFilterCondition(query, params, "m.component", "components", opts.Components)
-	query, params = addFilterCondition(query, params, "m.category", "categories", opts.Categories)
-	query, params = addFilterCondition(query, params, "m.subCategory", "subcategories", opts.Subcategories)
-	query += ")"
-
-	query, params = addFilterCondition(query, params, "c.name", "clusters", opts.Clusters)
-
-	query += ` ORDER BY c.os`
-	return queryRows[string](ds.cluster, query, params, "os", c)
+	return ds.GenericFiltering("os", opts, c)
 }
 
 func (ds *DataStore) GetClusters(opts FilterOptions, c context.Context) ([]string, error) {
-	query := "SELECT DISTINCT RAW c.name FROM `clusters` c WHERE c.name != \"\" AND c.name IN (SELECT DISTINCT RAW m.`cluster` FROM metrics m WHERE m.hidden = False"
-	params := make(map[string]interface{})
-
-	query, params = addFilterCondition(query, params, "m.component", "components", opts.Components)
-	query, params = addFilterCondition(query, params, "m.category", "categories", opts.Categories)
-	query, params = addFilterCondition(query, params, "m.subCategory", "subcategories", opts.Subcategories)
-	query += ")"
-
-	query, params = addFilterCondition(query, params, "c.os", "os", opts.OS)
-
-	query += ` ORDER BY c.name`
-	return queryRows[string](ds.cluster, query, params, "cluster", c)
+	return ds.GenericFiltering("cluster", opts, c)
 }

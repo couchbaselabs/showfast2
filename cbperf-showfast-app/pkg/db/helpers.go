@@ -3,9 +3,12 @@ package db
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/couchbase/gocb/v2"
 )
+
+
 
 // queryRows executes a query and reads all rows into a slice, with consistent error handling
 func queryRows[T any](cluster *gocb.Cluster, query string, params map[string]interface{}, rowErrorMsg string, c context.Context) ([]T, error) {
@@ -62,4 +65,22 @@ func addFilterCondition(query string, params map[string]interface{}, fieldName s
 		params[paramName] = values
 	}
 	return query, params
+}
+
+func normalizeGenericFilterColumn(filter string) (string, error) {
+	// Accept either API-style names (subcategory, cluster) or DB column names.
+	switch strings.ToLower(strings.TrimSpace(filter)) {
+	case "component":
+		return "component", nil
+	case "category":
+		return "category", nil
+	case "subcategory", "sub_category", "subCategory":
+		return "subCategory", nil
+	case "os":
+		return "os", nil
+	case "cluster", "clusters", "name":
+		return "name", nil
+	default:
+		return "", fmt.Errorf("unsupported filter: %s", filter)
+	}
 }
