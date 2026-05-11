@@ -166,10 +166,12 @@ function buildVariableQuery(endpoint: FilterEndpoint, dependencies: VariableName
   return `${endpoint}?${query}`;
 }
 
-function setQueryIfChanged(variable: QueryVariable, query: string) {
+function setQueryIfChanged(variable: QueryVariable, query: string): boolean {
   if (variable.state.query !== query) {
     variable.setState({ query });
+    return true;
   }
+  return false;
 }
 
 function getPeerDependencies(variableName: VariableName): VariableName[] {
@@ -186,16 +188,27 @@ export function timelinesScene() {
 
   const variables = FILTER_DEFINITIONS.map((definition) => variableMap[definition.name]);
 
-  const syncQueries = () => {
+  const syncQueries = (): QueryVariable[] => {
+    const changed: QueryVariable[] = [];
     FILTER_DEFINITIONS.forEach((definition) => {
       const dependencies = getPeerDependencies(definition.name);
       const query = buildVariableQuery(definition.endpoint, dependencies);
-      setQueryIfChanged(variableMap[definition.name], query);
+      if (setQueryIfChanged(variableMap[definition.name], query)) {
+        changed.push(variableMap[definition.name]);
+      }
     });
+    return changed;
   };
 
   variables[0].addActivationHandler(() => {
-    const subs = variables.map((variable) => variable.subscribeToState(() => syncQueries()));
+    const subs = variables.map((variable) =>
+      variable.subscribeToState(() => {
+        // Force re-fetch on variables whose query changed so reverting to All
+        // clears cached options and issues a fresh API request.
+        const changed = syncQueries();
+        changed.forEach((v) => v.validateAndUpdate().subscribe());
+      })
+    );
     syncQueries();
     return () => subs.forEach((s) => s.unsubscribe());
   });
