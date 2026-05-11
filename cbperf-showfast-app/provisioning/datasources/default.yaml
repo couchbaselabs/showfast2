@@ -1,6 +1,13 @@
 apiVersion: 1
 
 datasources:
-  - name: gdev-testdata
-    isDefault: false
-    type: testdata
+  - name: Showfast
+    uid: showfast_api
+    type: yesoreyeram-infinity-datasource
+    isDefault: true
+    basicAuth: false
+    url: ${SHOWFAST_API_URL}
+    jsonData:
+      tlsSkipVerify: true
+      allowDangerousHTTPMethods: false
+    secureJsonData: {}

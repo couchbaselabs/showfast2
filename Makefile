@@ -5,7 +5,7 @@ build-plugin:
 	@cd cbperf-showfast-app/ && \
 	npm install && \
 	npm run build && \
-	mage -v
+	mage
 
 build-docker: build-plugin
 	@cd cbperf-showfast-app && \

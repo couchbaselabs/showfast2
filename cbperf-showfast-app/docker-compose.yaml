@@ -5,3 +5,6 @@ services:
       service: grafana
     env_file:
       - .env
+    environment:
+      GF_INSTALL_PLUGINS: yesoreyeram-infinity-datasource
+      SHOWFAST_API_URL: ${SHOWFAST_API_URL:-http://localhost:3000/api/cbperf-showfast-app/resources}
