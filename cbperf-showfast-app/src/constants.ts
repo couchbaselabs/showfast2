@@ -1,15 +1,15 @@
 import pluginJson from './plugin.json';
 
 export const PLUGIN_BASE_URL = `/a/${pluginJson.id}`;
+export const API_BASE_URL = `/api/plugins/${pluginJson.id}/resources`;
 
-export enum ROUTES {
-  Home = 'home',
-  WithTabs = 'page-with-tabs',
-  WithDrilldown = 'page-with-drilldown',
-  HelloWorld = 'hello-world',
+export const ROUTES = {
+  Home: 'home',
+  Timelines: 'timelines',
+  Search: 'search',
 }
 
 export const DATASOURCE_REF = {
-  uid: 'gdev-testdata',
-  type: 'testdata',
-};
+  uid: 'showfast_api',
+  type: 'yesoreyeram-infinity-datasource',
+} as const;

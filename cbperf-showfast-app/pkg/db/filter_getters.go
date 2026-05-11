@@ -36,7 +36,7 @@ func (ds *DataStore) getMetricsDimension(dimension string, opts FilterOptions, c
 		return nil, fmt.Errorf("unknown dimension: %s", dimension)
 	}
 
-	query := fmt.Sprintf(`SELECT DISTINCT RAW m.%s FROM metrics m WHERE m.hidden = False`, dimension)
+	query := fmt.Sprintf(`SELECT DISTINCT RAW m.%s FROM metrics m WHERE m.%s != "" AND m.hidden = False`, dimension, dimension)
 	params := make(map[string]interface{})
 
 	// Apply direct filters
@@ -70,7 +70,7 @@ func (ds *DataStore) GetSubcategories(opts FilterOptions, c context.Context) ([]
 }
 
 func (ds *DataStore) GetOs(opts FilterOptions, c context.Context) ([]string, error) {
-	query := "SELECT DISTINCT RAW c.os FROM `clusters` c WHERE c.name IN (SELECT DISTINCT RAW m.`cluster` FROM metrics m WHERE m.hidden = False"
+	query := "SELECT DISTINCT RAW c.os FROM `clusters` c WHERE c.os != \"\" AND c.name IN (SELECT DISTINCT RAW m.`cluster` FROM metrics m WHERE m.hidden = False"
 	params := make(map[string]interface{})
 
 	query, params = addFilterCondition(query, params, "m.component", "components", opts.Components)
@@ -85,7 +85,7 @@ func (ds *DataStore) GetOs(opts FilterOptions, c context.Context) ([]string, err
 }
 
 func (ds *DataStore) GetClusters(opts FilterOptions, c context.Context) ([]string, error) {
-	query := "SELECT DISTINCT RAW c.name FROM `clusters` c WHERE c.name IN (SELECT DISTINCT RAW m.`cluster` FROM metrics m WHERE m.hidden = False"
+	query := "SELECT DISTINCT RAW c.name FROM `clusters` c WHERE c.name != \"\" AND c.name IN (SELECT DISTINCT RAW m.`cluster` FROM metrics m WHERE m.hidden = False"
 	params := make(map[string]interface{})
 
 	query, params = addFilterCondition(query, params, "m.component", "components", opts.Components)
