@@ -12,7 +12,9 @@ type FilterOptions struct {
 	Subcategories []string
 	Clusters      []string
 	OS            []string
+	Tags 		  map[string][]string
 }
+
 type GenericFilterSpec struct {
 	column string
 	param  string
@@ -85,4 +87,45 @@ func (ds *DataStore) GetOs(opts FilterOptions, c context.Context) ([]string, err
 
 func (ds *DataStore) GetClusters(opts FilterOptions, c context.Context) ([]string, error) {
 	return ds.GenericFiltering("cluster", opts, c)
+}
+
+func (ds *DataStore) GetFilters(c context.Context) (*map[string][]string, error) {
+	type tagDef struct {
+		Key   string `json:"k"`
+		Value string `json:"v"`
+	}
+
+	tagQuery := `
+		SELECT k, v
+		FROM metrics m
+		UNNEST OBJECT_PAIRS(m.tags) AS entry
+		LET k = entry.name,
+		    v = entry.val
+		WHERE m.hidden = False
+		AND m.tags IS NOT NULL
+		GROUP BY k, v
+	`
+	tagRows, err := queryRows[tagDef](ds.cluster, tagQuery, nil, "tag", c)
+	if err != nil {
+		return nil, err
+	}
+
+	tagMap := make(map[string]map[string]bool)
+	for _, tag := range tagRows {
+		if _, ok := tagMap[tag.Key]; !ok {
+			tagMap[tag.Key] = make(map[string]bool)
+		}
+		tagMap[tag.Key][tag.Value] = true
+	}
+
+	tags := make(map[string][]string)
+	for key, valueMap := range tagMap {
+		values := make([]string, 0, len(valueMap))
+		for value := range valueMap {
+			values = append(values, value)
+		}
+		tags[key] = values
+	}
+
+	return &tags, nil
 }

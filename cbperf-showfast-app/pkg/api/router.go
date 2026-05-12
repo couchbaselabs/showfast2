@@ -11,9 +11,11 @@ func SetupRouter(ds *db.DataStore) *gin.Engine {
 	router.GET("/builds", func(c *gin.Context) { GetBuildsV2(c, ds) })
 	router.GET("/metrics", func(c *gin.Context) { GetMetricsV2(c, ds) })
 	router.GET("/benchmarks", func(c *gin.Context) { GetBenchmarksV2(c, ds) })
-	router.GET("/timeline", func(c *gin.Context) { GetTimelineV2(c, ds) })
+	router.GET("/timeline/:metricId", func(c *gin.Context) { GetTimelineV2(c, ds) })
+	router.GET("/timelines/panels", func(c *gin.Context) { GetTimelinePanelsV2(c, ds) })
 	router.GET("/runs", func(c *gin.Context) { GetRunsV2(c, ds) })
 	router.GET("/filters", func(c *gin.Context) { GetFiltersV2(c, ds) })
+	router.GET("/cluster/:clusterName", func(c *gin.Context) { GetClusterInfoV2(c, ds) })
 
 	router.POST("/metrics", func(c *gin.Context) { AddMetricV2(c, ds) })
 	router.POST("/clusters", func(c *gin.Context) { AddClusterV2(c, ds) })

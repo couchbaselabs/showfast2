@@ -1,6 +1,6 @@
 import React from 'react';
 import { EmbeddedScene, SceneFlexItem, SceneFlexLayout, SceneReactObject } from '@grafana/scenes';
-import { Button, Icon, LinkButton, Stack, useTheme2 } from '@grafana/ui';
+import { Button, LinkButton, Stack, useTheme2 } from '@grafana/ui';
 import { ROUTES } from '../../constants';
 import { prefixRoute } from '../../utils/utils.routing';
 

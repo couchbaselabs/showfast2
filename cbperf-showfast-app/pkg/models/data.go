@@ -34,4 +34,21 @@ type Metric struct {
 	Tags        map[string]string `json:"tags,omitempty"`
 }
 
+type TimelinePanel struct {
+	MetricID         string            `json:"metricId"`
+	Title            string            `json:"title"`
+	Category         string            `json:"category"`
+	SubCategory      string            `json:"subCategory"`
+	Component        string            `json:"component"`
+	ClusterID        string            `json:"cluster"`
+	ClusterInfo      *Cluster          `json:"clusterInfo,omitempty"`
+	Tags             map[string]string `json:"tags,omitempty"`
+	BenchmarksValues []TimelinePoint   `json:"benchmarksValues"`
+}
+
+type TimelinePoint struct {
+	Build string  `json:"build"`
+	Value float64 `json:"value"`
+}
+
 type Run map[string]interface{}

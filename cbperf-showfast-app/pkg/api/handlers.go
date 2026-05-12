@@ -76,7 +76,7 @@ func GetBenchmarksV2(c *gin.Context, ds *db.DataStore) {
 }
 
 func GetTimelineV2(c *gin.Context, ds *db.DataStore) {
-	metricID := c.Query("metric_id")
+	metricID := c.Param("metricId")
 	if metricID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "metric_id parameter is required"})
 		return
@@ -89,6 +89,27 @@ func GetTimelineV2(c *gin.Context, ds *db.DataStore) {
 	}
 
 	c.IndentedJSON(http.StatusOK, timeline)
+}
+
+func GetTimelinePanelsV2(c *gin.Context, ds *db.DataStore) {
+	filters := db.FilterOptions{
+		Components:    queryValues(c, "component"),
+		Categories:    queryValues(c, "category"),
+		Subcategories: queryValues(c, "subcategory"),
+		Clusters:      queryValues(c, "cluster"),
+		OS:            queryValues(c, "os"),
+		Tags:          extractTagsFromQuery(c),
+	}
+
+	ctx := extractContextFromGin(c)
+	panels, err := ds.GetTimelinePanels(&filters, ctx)
+
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+
+	c.IndentedJSON(http.StatusOK, panels)
 }
 
 func GetRunsV2(c *gin.Context, ds *db.DataStore) {
@@ -116,6 +137,25 @@ func GetFiltersV2(c *gin.Context, ds *db.DataStore) {
 		return
 	}
 	c.IndentedJSON(http.StatusOK, filters)
+}
+
+func GetClusterInfoV2(c *gin.Context, ds *db.DataStore) {
+	clusterName := c.Param("clusterName")
+	if clusterName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "clusterName parameter is required"})
+		return
+	}
+	ctx := extractContextFromGin(c)
+	cluster, err := ds.GetClusterInfo(clusterName, ctx)
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	if cluster == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "cluster not found"})
+		return
+	}
+	c.IndentedJSON(http.StatusOK, cluster)
 }
 
 func AddMetricV2(c *gin.Context, ds *db.DataStore) {
@@ -190,23 +230,3 @@ func DeleteBenchmarkV2(c *gin.Context, ds *db.DataStore) {
 	}
 	c.IndentedJSON(http.StatusOK, gin.H{"status": "deleted"})
 }
-
-// func GetFilteredMetrics(c *gin.Context, ds *db.DataStore) {
-// 	extractedComponent := c.Query("component")
-// 	extractedCategory := c.Query("category")
-// 	extractedSubcategory := c.Query("subcategory")
-// 	extractedCluster := c.Query("cluster")
-// 	extractedOS := c.Query("os")
-// 	extractedBuild := c.Query("build")
-
-// 	tags := extractTagFromQuery(c)
-// 	ctx := extractContextFromGin(c)
-
-// 	metrics, err := ds.GetFilteredMetrics(tags, ctx)
-// 	if err != nil {
-// 		c.AbortWithError(http.StatusInternalServerError, err)
-// 		return
-// 	}
-
-// 	c.IndentedJSON(http.StatusOK, metrics)
-// }

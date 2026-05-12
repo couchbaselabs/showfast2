@@ -6,7 +6,7 @@ Base path:
 This document reflects the currently registered routes in `pkg/api/router.go` and how query parsing is implemented in `pkg/api/handlers.go` and `pkg/api/filter_handlers.go`.
 
 ## GET Endpoints
-
+ 
 ### GET /builds
 Purpose:
 - Returns distinct non-hidden build versions from benchmark documents.

@@ -8,8 +8,6 @@ import (
 	"github.com/couchbase/gocb/v2"
 )
 
-
-
 // queryRows executes a query and reads all rows into a slice, with consistent error handling
 func queryRows[T any](cluster *gocb.Cluster, query string, params map[string]interface{}, rowErrorMsg string, c context.Context) ([]T, error) {
 	var queryOpts *gocb.QueryOptions
@@ -83,4 +81,21 @@ func normalizeGenericFilterColumn(filter string) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported filter: %s", filter)
 	}
+}
+
+// semanticBuildOrder returns an ORDER BY clause that sorts build strings numerically.
+// Parses versions like "7.2.77-1000" into major.minor.patch-buildNo and orders numerically.
+// buildField: e.g. "b.`build`" or just "build"
+// direction: e.g. "ASC" or "DESC"
+func semanticBuildOrder(buildField, direction string) string {
+	return fmt.Sprintf(
+		"TO_NUMBER(SPLIT(SPLIT(%s, \"-\")[0], \".\")[0]) %s, "+
+			"TO_NUMBER(SPLIT(SPLIT(%s, \"-\")[0], \".\")[1]) %s, "+
+			"TO_NUMBER(SPLIT(SPLIT(%s, \"-\")[0], \".\")[2]) %s, "+
+			"TO_NUMBER(SPLIT(%s, \"-\")[1]) %s",
+		buildField, direction,
+		buildField, direction,
+		buildField, direction,
+		buildField, direction,
+	)
 }
