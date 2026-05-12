@@ -22,10 +22,17 @@
   "includes": [
     {
       "type": "page",
+      "name": "Home",
+      "path": "/a/%PLUGIN_ID%",
+      "addToNav": true,
+      "defaultNav": true
+    },
+    {
+      "type": "page",
       "name": "Timelines",
       "path": "/a/%PLUGIN_ID%/timelines",
       "addToNav": true,
-      "defaultNav": true
+      "defaultNav": false
       
     },
     {

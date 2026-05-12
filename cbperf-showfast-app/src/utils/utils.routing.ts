@@ -3,7 +3,7 @@ import { PLUGIN_BASE_URL, ROUTES } from '../constants';
 export const ROUTE_PATHS = {
   search: () => `/${ROUTES.Search}`,
   timelines: () => `/${ROUTES.Timelines}`,
-  home: () => `/${ROUTES.Timelines}`,
+  home: () => `/${ROUTES.Home}`,
 }
 
 // Prefixes the route with the base URL of the plugin

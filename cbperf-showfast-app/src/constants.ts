@@ -4,7 +4,7 @@ export const PLUGIN_BASE_URL = `/a/${pluginJson.id}`;
 export const API_BASE_URL = `/api/plugins/${pluginJson.id}/resources`;
 
 export const ROUTES = {
-  Home: 'home',
+  Home: '',
   Timelines: 'timelines',
   Search: 'search',
 }

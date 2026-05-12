@@ -2,11 +2,13 @@ import React from 'react';
 import { SceneApp, useSceneApp } from '@grafana/scenes';
 import { AppRootProps } from '@grafana/data';
 import { PluginPropsContext } from '../../utils/utils.plugin';
+import { homePage } from '../../pages/Home/homePage';
+import { searchPage } from '../../pages/Search/searchPage';
 import { timelinesPage } from '../../pages/Timelines/timelinesPage';
 
 function getSceneApp() {
   return new SceneApp({
-    pages: [timelinesPage],
+    pages: [homePage, timelinesPage, searchPage],
     urlSyncOptions: {
       updateUrlOnInit: true,
       createBrowserHistorySteps: true,
