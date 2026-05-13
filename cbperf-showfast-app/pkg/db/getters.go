@@ -82,9 +82,9 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 	}
 
 	query := "SELECT m.id AS metricId, m.`title` AS title, m.component AS component, m.category AS category, "
-	query += "m.subCategory AS subCategory, m.cluster AS cluster, m.tags AS tags, "
+	query += "m.subCategory AS subCategory, m.`cluster` AS `cluster`, m.tags AS tags, "
 	query += "c.name AS clusterName, c.os AS clusterOS, c.cpu AS clusterCPU, c.disk AS clusterDisk, c.memory AS clusterMemory, "
-	query += "b.`build` AS build, b.`value` AS value "
+	query += "b.`build` AS `build`, b.`value` AS `value` "
 	query += "FROM metrics m JOIN benchmarks b ON m.id = b.metric JOIN `clusters` c ON c.name = m.`cluster` "
 	query += "WHERE b.hidden = False AND m.hidden = False"
 	params := make(map[string]interface{})

@@ -1,4 +1,4 @@
-.PHONY: build-plugin build-docker reload-plugin clean-plugin
+.PHONY: build-plugin build-docker reload-plugin clean-plugin rebuild-backend-and-restart
 
 # Build frontend assets and backend binaries into dist/
 build-plugin:
@@ -6,6 +6,11 @@ build-plugin:
 	npm install && \
 	npm run build && \
 	mage
+
+rebuild-backend-and-restart:
+	@cd cbperf-showfast-app/ && \
+	mage && \
+	docker restart cbperf-showfast-app
 
 build-docker: build-plugin
 	@cd cbperf-showfast-app && \

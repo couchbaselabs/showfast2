@@ -1,227 +1,32 @@
-import { DataQueryRequest, DataQueryResponse, MetricFindValue } from '@grafana/data';
-import { getBackendSrv, getTemplateSrv } from '@grafana/runtime';
-import {
-  EmbeddedScene,
-  PanelBuilders,
-  QueryVariable,
-  RuntimeDataSource,
-  SceneControlsSpacer,
-  SceneFlexItem,
-  SceneFlexLayout,
-  SceneVariableSet,
-  VariableValueSelectors,
-  registerRuntimeDataSource,
-} from '@grafana/scenes';
-import { API_BASE_URL } from '../../constants';
+/**
+ * Timelines scene - displays performance timelines with filterable bar charts.
+ * Keeps composition concerns in this file.
+ */
 
-// in memory datasource for filter variables 
-const SHOWFAST_FILTERS_RUNTIME_DATASOURCE_PLUGIN_ID = 'cbperf-showfast-app-filters-runtime';
-const SHOWFAST_FILTERS_RUNTIME_DATASOURCE_UID = 'cbperf-showfast-app-filters-runtime';
+import { EmbeddedScene, PanelBuilders, SceneControlsSpacer, SceneFlexItem, SceneFlexLayout, SceneVariableSet, VariableValueSelectors } from '@grafana/scenes';
+import { ensureRuntimeDataSourceRegistered } from './showfastFilterDataSource';
+import { createTimelineVariableController } from './timelinesVariableController';
 
-const variableToQueryKey = {
-  component: 'component',
-  category: 'category',
-  subcategory: 'subcategory',
-  cluster: 'cluster',
-  os: 'os',
-} as const;
-
-const endpointToVariable = {
-  components: 'component',
-  categories: 'category',
-  subcategories: 'subcategory',
-  clusters: 'cluster',
-  os: 'os',
-} as const;
-
-type VariableName = keyof typeof variableToQueryKey;
-type FilterEndpoint = keyof typeof endpointToVariable;
-type FilterDefinition = {
-  name: VariableName;
-  label: string;
-  endpoint: FilterEndpoint;
-};
-
-const FILTER_DEFINITIONS: FilterDefinition[] = [
-  { name: 'component', label: 'Component', endpoint: 'components' },
-  { name: 'category', label: 'Category', endpoint: 'categories' },
-  { name: 'subcategory', label: 'Subcategory', endpoint: 'subcategories' },
-  { name: 'os', label: 'OS', endpoint: 'os' },
-  { name: 'cluster', label: 'Cluster', endpoint: 'clusters' },
-];
-
-function selectedValuesForVariable(name: string): string[] {
-  const templateSrv = getTemplateSrv();
-  const values: string[] = [];
-
-  templateSrv.replace(`$${name}`, {}, (value: string | string[]) => {
-    if (Array.isArray(value)) {
-      values.push(...value);
-    } else {
-      values.push(value);
-    }
-    return '';
-  });
-
-  return values
-    .map((value) => value.trim())
-    .filter((value) => value !== '' && value !== '$__all' && value !== '*')
-    .filter((value, index, arr) => arr.indexOf(value) === index);
-}
-
-function parseVariableNameFromQueryKey(queryKey: string): VariableName | null {
-  const match = (Object.entries(variableToQueryKey) as Array<[VariableName, string]>).find(
-    ([, value]) => value === queryKey
-  );
-  return match ? match[0] : null;
-}
-
-function buildFilterParamsFromDependencies(dependencies: VariableName[]): URLSearchParams {
-  const params = new URLSearchParams();
-
-  dependencies.forEach((variableName) => {
-    const queryKey = variableToQueryKey[variableName];
-    for (const value of selectedValuesForVariable(variableName)) {
-      params.append(queryKey, value);
-    }
-  });
-
-  return params;
-}
-
-class ShowfastFilterRuntimeDataSource extends RuntimeDataSource {
-  constructor() {
-    super(SHOWFAST_FILTERS_RUNTIME_DATASOURCE_PLUGIN_ID, SHOWFAST_FILTERS_RUNTIME_DATASOURCE_UID);
-  }
-
-  async query(_request: DataQueryRequest): Promise<DataQueryResponse> {
-    return { data: [] };
-  }
-
-  async metricFindQuery(rawQuery: string): Promise<MetricFindValue[]> {
-    const [rawEndpoint, rawQueryString] = rawQuery.trim().replace(/^\//, '').split('?');
-    const endpoint = rawEndpoint as FilterEndpoint;
-    const variableForEndpoint = endpointToVariable[endpoint];
-
-    if (!variableForEndpoint) {
-      return [];
-    }
-
-    const dependenciesFromQuery = rawQueryString
-      ? rawQueryString
-          .split('&')
-          .map((part) => part.split('=')[0]?.trim())
-          .filter((key) => key !== '')
-          .map((queryKey) => parseVariableNameFromQueryKey(queryKey))
-          .filter((name): name is VariableName => name !== null && name !== variableForEndpoint)
-      : [];
-
-    const dependencies = dependenciesFromQuery.length > 0
-      ? dependenciesFromQuery
-      : (Object.keys(variableToQueryKey) as VariableName[]).filter((name) => name !== variableForEndpoint);
-
-    const params = buildFilterParamsFromDependencies(dependencies);
-    const qs = params.toString();
-    const url = `${API_BASE_URL}/utils/${endpoint}${qs ? `?${qs}` : ''}`;
-
-    const values = await getBackendSrv().get<string[]>(url);
-    return values.map((value) => ({ text: value, value }));
-  }
-}
-
-let dataSourceRegistered = false;
-
-function ensureRuntimeDataSourceRegistered() {
-  if (dataSourceRegistered) {
-    return;
-  }
-
-  registerRuntimeDataSource({ dataSource: new ShowfastFilterRuntimeDataSource() });
-  dataSourceRegistered = true;
-}
-
-function createFilterVariable(name: VariableName, label: string, endpoint: FilterEndpoint) {
-  return new QueryVariable({
-    name,
-    label,
-    datasource: {
-      uid: SHOWFAST_FILTERS_RUNTIME_DATASOURCE_UID,
-      type: SHOWFAST_FILTERS_RUNTIME_DATASOURCE_PLUGIN_ID,
-    },
-    query: endpoint,
-    isMulti: true,
-    includeAll: true,
-    defaultToAll: true,
-    allValue: '*',
-  });
-}
-
-function buildVariableQuery(endpoint: FilterEndpoint, dependencies: VariableName[]): string {
-  const activeDependencies = dependencies.filter((name) => selectedValuesForVariable(name).length > 0);
-  if (activeDependencies.length === 0) {
-    return endpoint;
-  }
-
-  const query = activeDependencies.map((name) => `${variableToQueryKey[name]}=$${name}`).join('&');
-  return `${endpoint}?${query}`;
-}
-
-function setQueryIfChanged(variable: QueryVariable, query: string): boolean {
-  if (variable.state.query !== query) {
-    variable.setState({ query });
-    return true;
-  }
-  return false;
-}
-
-function getPeerDependencies(variableName: VariableName): VariableName[] {
-  return FILTER_DEFINITIONS.map((definition) => definition.name).filter((name) => name !== variableName);
-}
-
+/**
+ * Build the Timelines scene with filter variables and placeholder content.
+ * Phase 4 will add panel fetching and rendering here.
+ */
 export function timelinesScene() {
   ensureRuntimeDataSourceRegistered();
-
-  const variableMap = FILTER_DEFINITIONS.reduce((acc, definition) => {
-    acc[definition.name] = createFilterVariable(definition.name, definition.label, definition.endpoint);
-    return acc;
-  }, {} as Record<VariableName, QueryVariable>);
-
-  const variables = FILTER_DEFINITIONS.map((definition) => variableMap[definition.name]);
-
-  const syncQueries = (): QueryVariable[] => {
-    const changed: QueryVariable[] = [];
-    FILTER_DEFINITIONS.forEach((definition) => {
-      const dependencies = getPeerDependencies(definition.name);
-      const query = buildVariableQuery(definition.endpoint, dependencies);
-      if (setQueryIfChanged(variableMap[definition.name], query)) {
-        changed.push(variableMap[definition.name]);
-      }
-    });
-    return changed;
-  };
-
-  variables[0].addActivationHandler(() => {
-    const subs = variables.map((variable) =>
-      variable.subscribeToState(() => {
-        // Force re-fetch on variables whose query changed so reverting to All
-        // clears cached options and issues a fresh API request.
-        const changed = syncQueries();
-        changed.forEach((v) => v.validateAndUpdate().subscribe());
-      })
-    );
-    syncQueries();
-    return () => subs.forEach((s) => s.unsubscribe());
+  const controller = createTimelineVariableController(() => {
+    // TODO: Phase 4 - trigger panel refresh here
   });
 
   return new EmbeddedScene({
-    $variables: new SceneVariableSet({
-      variables,
-    }),
+    $variables: new SceneVariableSet({ variables: controller.variables }),
     body: new SceneFlexLayout({
       children: [
         new SceneFlexItem({
           minHeight: 120,
-          body: PanelBuilders.text().setTitle('Timelines').build(),
+          body: PanelBuilders.text()
+            .setTitle('Timelines')
+            .setDescription('Panels will load based on selected filters. Phase 4 coming soon.')
+            .build(),
         }),
       ],
     }),
