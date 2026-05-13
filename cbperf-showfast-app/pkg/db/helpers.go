@@ -93,9 +93,9 @@ func semanticBuildOrder(buildField, direction string) string {
 			"TO_NUMBER(SPLIT(SPLIT(%s, \"-\")[0], \".\")[1]) %s, "+
 			"TO_NUMBER(SPLIT(SPLIT(%s, \"-\")[0], \".\")[2]) %s, "+
 			"TO_NUMBER(SPLIT(%s, \"-\")[1]) %s",
-		buildField, direction,
-		buildField, direction,
-		buildField, direction,
+		buildField, "ASC",
+		buildField, "ASC",
+		buildField, "ASC",
 		buildField, direction,
 	)
 }

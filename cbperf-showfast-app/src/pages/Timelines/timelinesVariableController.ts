@@ -16,8 +16,17 @@ export interface TimelineVariableController {
   variables: QueryVariable[];
 }
 
+function runVariableUpdate(variable: QueryVariable): Promise<void> {
+  return new Promise((resolve) => {
+    variable.validateAndUpdate().subscribe({
+      complete: () => resolve(),
+      error: () => resolve(),
+    });
+  });
+}
+
 export function createTimelineVariableController(
-  onVariablesChanged?: () => void
+  onVariablesChanged?: () => void | Promise<void>
 ): TimelineVariableController {
   const variableMap = FILTER_DEFINITIONS.reduce((acc, definition) => {
     acc[definition.name] = createFilterVariable(definition.name, definition.label, definition.endpoint);
@@ -38,17 +47,44 @@ export function createTimelineVariableController(
     return changed;
   };
 
+  let refreshInFlight = false;
+  let refreshQueued = false;
+
+  // Deterministic refresh pipeline:
+  // 1) sync variable queries
+  // 2) refresh dependent variable options
+  // 3) trigger external panel refresh callback once
+  const runRefreshPipeline = async (): Promise<void> => {
+    if (refreshInFlight) {
+      refreshQueued = true;
+      return;
+    }
+
+    refreshInFlight = true;
+    do {
+      refreshQueued = false;
+
+      const changed = syncQueries();
+      if (changed.length > 0) {
+        await Promise.all(changed.map((v) => runVariableUpdate(v)));
+      }
+
+      if (onVariablesChanged) {
+        await onVariablesChanged();
+      }
+    } while (refreshQueued);
+
+    refreshInFlight = false;
+  };
+
   variables[0].addActivationHandler(() => {
     const subs = variables.map((variable) =>
       variable.subscribeToState(() => {
-        const changed = syncQueries();
-        changed.forEach((v) => v.validateAndUpdate().subscribe());
-        onVariablesChanged?.();
+        void runRefreshPipeline();
       })
     );
 
-    syncQueries();
-    onVariablesChanged?.();
+    void runRefreshPipeline();
 
     return () => subs.forEach((s) => s.unsubscribe());
   });
