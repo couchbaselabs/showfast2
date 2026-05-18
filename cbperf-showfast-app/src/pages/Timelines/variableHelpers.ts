@@ -5,6 +5,7 @@
 
 import { getTemplateSrv, locationService } from '@grafana/runtime';
 import { QueryVariable } from '@grafana/scenes';
+import { CleanUrlQueryVariable } from './cleanUrlQueryVariable';
 import {
   VariableName,
   FilterEndpoint,
@@ -137,7 +138,7 @@ export function createFilterVariable(
   label: string,
   endpoint: FilterEndpoint
 ): QueryVariable {
-  return new QueryVariable({
+  return new CleanUrlQueryVariable({
     name,
     label,
     datasource: {
