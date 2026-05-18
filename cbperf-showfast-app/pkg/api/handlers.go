@@ -18,21 +18,29 @@ func extractContextFromGin(c *gin.Context) context.Context {
 func extractTagsFromQuery(c *gin.Context) map[string][]string {
 	tags := make(map[string][]string)
 	for key, values := range c.Request.URL.Query() {
+		tagKey := ""
 		if strings.HasPrefix(key, "tag.") {
-			tagKey := strings.TrimPrefix(key, "tag.")
-			normalized := make([]string, 0)
-			for _, item := range values {
-				for _, part := range strings.Split(item, ",") {
-					v := strings.TrimSpace(part)
-					v = strings.Trim(v, `"`)
-					if v != "" {
-						normalized = append(normalized, v)
-					}
+			tagKey = strings.TrimPrefix(key, "tag.")
+		} else if strings.HasPrefix(key, "var-tag.") {
+			tagKey = strings.TrimPrefix(key, "var-tag.")
+		}
+
+		if tagKey == "" {
+			continue
+		}
+
+		normalized := make([]string, 0)
+		for _, item := range values {
+			for _, part := range strings.Split(item, ",") {
+				v := strings.TrimSpace(part)
+				v = strings.Trim(v, `"`)
+				if v != "" {
+					normalized = append(normalized, v)
 				}
 			}
-			if len(normalized) > 0 {
-				tags[tagKey] = normalized
-			}
+		}
+		if len(normalized) > 0 {
+			tags[tagKey] = append(tags[tagKey], normalized...)
 		}
 	}
 	return tags

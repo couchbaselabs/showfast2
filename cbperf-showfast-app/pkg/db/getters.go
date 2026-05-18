@@ -102,7 +102,7 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 		params["subcategories"] = filters.Subcategories
 	}
 	if len(filters.Clusters) > 0 {
-		query += " AND m.cluster IN $clusters"
+		query += " AND m.`cluster` IN $clusters"
 		params["clusters"] = filters.Clusters
 	}
 	if len(filters.OS) > 0 {

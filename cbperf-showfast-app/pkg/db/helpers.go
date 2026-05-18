@@ -49,7 +49,8 @@ func buildTagFilters(tags map[string][]string) (string, map[string]interface{}) 
 			continue
 		}
 		paramName := fmt.Sprintf("tagVal%d", i)
-		clause += fmt.Sprintf(` AND m.tags.%s IN $%s`, k, paramName)
+		// Quote tag key identifiers so reserved words like `group` are valid.
+		clause += fmt.Sprintf(" AND m.tags.`%s` IN $%s", k, paramName)
 		params[paramName] = values
 		i++
 	}

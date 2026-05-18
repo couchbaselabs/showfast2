@@ -1,4 +1,4 @@
-.PHONY: build-plugin build-docker reload-plugin clean-plugin rebuild-backend-and-restart
+.PHONY: build-plugin build-docker reload-docker clean-plugin reload-backend-and-docker
 
 # Build frontend assets and backend binaries into dist/
 build-plugin:
@@ -7,7 +7,7 @@ build-plugin:
 	npm run build && \
 	mage
 
-rebuild-backend-and-restart:
+reload-backend-and-docker:
 	@cd cbperf-showfast-app/ && \
 	mage && \
 	docker restart cbperf-showfast-app
@@ -17,7 +17,7 @@ build-docker: build-plugin
  	docker compose --env-file .env up --build -d
 
 # Reload Grafana so updated plugin artifacts are reloaded from the bind mount
-reload-plugin:
+reload-docker:
 	@docker restart cbperf-showfast-app
 
 # Remove generated artifacts and local caches to prepare for a clean build

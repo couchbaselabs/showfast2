@@ -2,7 +2,7 @@ import { getBackendSrv } from '@grafana/runtime';
 import { API_BASE_URL } from '../../constants';
 import { FILTER_DEFINITIONS, variableToQueryKey } from './filterConfig';
 import { TimelinePanel } from './timelinesApiTypes';
-import { selectedValuesForVariable } from './variableHelpers';
+import { appendUrlTagParams, selectedValuesForVariable } from './variableHelpers';
 
 function buildPanelsQueryParams(): URLSearchParams {
   const params = new URLSearchParams();
@@ -15,7 +15,7 @@ function buildPanelsQueryParams(): URLSearchParams {
     }
   }
 
-  return params;
+  return appendUrlTagParams(params);
 }
 
 export async function fetchTimelinePanels(): Promise<TimelinePanel[]> {

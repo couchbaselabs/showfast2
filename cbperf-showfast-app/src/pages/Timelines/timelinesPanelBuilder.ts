@@ -1,6 +1,6 @@
 import { DataFrame, FieldType, LoadingState, PanelData, dateTime } from '@grafana/data';
 import { PanelBuilders, SceneDataNode, SceneFlexItem } from '@grafana/scenes';
-import { VizOrientation } from '@grafana/schema';
+import { VizOrientation, VisibilityMode } from '@grafana/schema';
 import { TimelinePanel } from './timelinesApiTypes';
 
 function formatSubtitle(panel: TimelinePanel): string {
@@ -51,11 +51,12 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
     .setData(new SceneDataNode({ data: panelData }))
     .setOption('orientation', VizOrientation.Vertical)
     .setOption('xField', 'build')
-    .setOption('barWidth', 0.8)
+    .setOption('barWidth', 0.7)
+    .setOption('showValue', VisibilityMode.Always)
     .build();
 
   return new SceneFlexItem({
-    minHeight: Math.max(200, points.length * 30 + 80),
+    minHeight: 300,
     body: vizPanel,
   });
 }

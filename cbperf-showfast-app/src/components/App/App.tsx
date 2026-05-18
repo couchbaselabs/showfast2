@@ -10,7 +10,8 @@ function getSceneApp() {
   return new SceneApp({
     pages: [homePage, timelinesPage, searchPage],
     urlSyncOptions: {
-      updateUrlOnInit: true,
+      // Keep deep-link query params (including custom tag filters) intact on first load.
+      updateUrlOnInit: false,
       createBrowserHistorySteps: true,
     },
   });
@@ -26,7 +27,7 @@ function App(props: AppRootProps) {
   return (
     <PluginPropsContext.Provider value={props}>
       <AppWithScenes />
-    </PluginPropsContext.Provider>
+    </PluginPropsContext.Provider> 
   );
 }
 
