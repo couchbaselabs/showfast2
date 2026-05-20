@@ -7,31 +7,32 @@ import (
 
 func SetupRouter(ds *db.DataStore) *gin.Engine {
 	router := gin.Default()
+	h := NewHandler(ds)
 	
-	router.GET("/builds", func(c *gin.Context) { GetBuildsV2(c, ds) })
-	router.GET("/metrics", func(c *gin.Context) { GetMetricsV2(c, ds) })
-	router.GET("/benchmarks", func(c *gin.Context) { GetBenchmarksV2(c, ds) })
-	router.GET("/timeline/:metricId", func(c *gin.Context) { GetTimelineV2(c, ds) })
-	router.GET("/timelines/panels", func(c *gin.Context) { GetTimelinePanelsV2(c, ds) })
-	router.GET("/runs", func(c *gin.Context) { GetRunsV2(c, ds) })
-	router.GET("/filters", func(c *gin.Context) { GetFiltersV2(c, ds) })
-	router.GET("/cluster/:clusterName", func(c *gin.Context) { GetClusterInfoV2(c, ds) })
+	router.GET("/builds", h.GetBuildsV2)
+	router.GET("/metrics", h.GetMetricsV2)
+	router.GET("/benchmarks", h.GetBenchmarksV2)
+	router.GET("/timeline/:metricId", h.GetTimelineV2)
+	router.GET("/timelines/panels", h.GetTimelinePanelsV2)
+	router.GET("/runs", h.GetRunsV2)
+	router.GET("/filters", h.GetFiltersV2)
+	router.GET("/cluster/:clusterName", h.GetClusterInfoV2)
 
-	router.POST("/metrics", func(c *gin.Context) { AddMetricV2(c, ds) })
-	router.POST("/clusters", func(c *gin.Context) { AddClusterV2(c, ds) })
-	router.POST("/benchmarks", func(c *gin.Context) { AddBenchmarkV2(c, ds) })
+	router.POST("/metrics", h.AddMetricV2)
+	router.POST("/clusters", h.AddClusterV2)
+	router.POST("/benchmarks", h.AddBenchmarkV2)
 
-	router.PATCH("/benchmarks", func(c *gin.Context) { UpdateBenchmarkV2(c, ds) })
+	router.PATCH("/benchmarks", h.UpdateBenchmarkV2)
 	
-	router.DELETE("/benchmarks", func(c *gin.Context) { DeleteBenchmarkV2(c, ds) })
+	router.DELETE("/benchmarks", h.DeleteBenchmarkV2)
 
 	utils := router.Group("/utils")
 	{
-		utils.GET("/components", func(c *gin.Context) { GetComponentsV2(c, ds) })
-		utils.GET("/categories", func(c *gin.Context) { GetCategoriesV2(c, ds) })
-		utils.GET("/subcategories", func(c *gin.Context) { GetSubcategoriesV2(c, ds) })
-		utils.GET("/clusters", func(c *gin.Context) { GetClustersV2(c, ds) })	
-		utils.GET("/os", func(c *gin.Context) { GetOsV2(c, ds) })	
+		utils.GET("/components", h.GetComponentsV2)
+		utils.GET("/categories", h.GetCategoriesV2)
+		utils.GET("/subcategories", h.GetSubcategoriesV2)
+		utils.GET("/clusters", h.GetClustersV2)	
+		utils.GET("/os", h.GetOsV2)	
 	}
 
 	return router

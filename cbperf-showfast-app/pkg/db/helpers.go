@@ -66,6 +66,23 @@ func addFilterCondition(query string, params map[string]interface{}, fieldName s
 	return query, params
 }
 
+func addGenericFilterConditions(query string, params map[string]interface{}, opts FilterOptions, fieldNames map[string]string, skipColumns map[string]bool) (string, map[string]interface{}) {
+	for _, spec := range GenericFilterSpecs {
+		if skipColumns != nil && skipColumns[spec.column] {
+			continue
+		}
+
+		fieldName, ok := fieldNames[spec.column]
+		if !ok {
+			continue
+		}
+
+		query, params = addFilterCondition(query, params, fieldName, spec.param, spec.values(opts))
+	}
+
+	return query, params
+}
+
 func normalizeGenericFilterColumn(filter string) (string, error) {
 	// Accept either API-style names (subcategory, cluster) or DB column names.
 	switch strings.ToLower(strings.TrimSpace(filter)) {

@@ -56,18 +56,39 @@ Response:
 Errors:
 - `500 Internal Server Error` on query failures.
 
-### GET /timeline
+### GET /timeline/:metricId
 Purpose:
 - Returns timeline points for a metric as `[build, value]` pairs.
 
-Required query params:
-- `metric_id=<string>`
+Path params:
+- `:metricId` (required)
 
 Response:
 - `200 OK` with `[][]interface{}`.
 
 Validation:
-- `400 Bad Request` when `metric_id` is missing.
+- `400 Bad Request` when `:metricId` is empty.
+
+Errors:
+- `500 Internal Server Error` on query failures.
+
+### GET /timelines/panels
+Purpose:
+- Returns aggregated timeline panel data for metrics, joining benchmarks and cluster info.
+- Each panel groups all benchmark values for a given metric.
+
+Supported query params:
+- `component=<value>`: optional, supports repeated and comma-separated values.
+- `category=<value>`: optional, supports repeated and comma-separated values.
+- `subcategory=<value>`: optional, supports repeated and comma-separated values.
+- `cluster=<value>`: optional, supports repeated and comma-separated values.
+- `os=<value>`: optional, supports repeated and comma-separated values.
+- `tag.<key>=<value>`: optional dynamic tag filters.
+  - each tag key supports repeated and comma-separated values.
+
+Response:
+- `200 OK` with `[]TimelinePanel`.
+  - Each `TimelinePanel` includes `metricId`, `title`, `category`, `subCategory`, `component`, `cluster`, `clusterInfo` (`Cluster`), `tags`, and `benchmarksValues` (`[]TimelinePoint{build, value}`).
 
 Errors:
 - `500 Internal Server Error` on query failures.
@@ -87,6 +108,23 @@ Validation:
 - `400 Bad Request` when required params are missing.
 
 Errors:
+- `500 Internal Server Error` on query failures.
+
+### GET /cluster/:clusterName
+Purpose:
+- Returns cluster hardware/OS info for a given cluster name.
+
+Path params:
+- `:clusterName` (required)
+
+Response:
+- `200 OK` with `Cluster` (`{ cpu, disk, memory, name, os }`).
+
+Validation:
+- `400 Bad Request` when `:clusterName` is empty.
+
+Errors:
+- `404 Not Found` when the cluster does not exist.
 - `500 Internal Server Error` on query failures.
 
 ### GET /filters

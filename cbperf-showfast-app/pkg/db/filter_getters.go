@@ -12,7 +12,7 @@ type FilterOptions struct {
 	Subcategories []string
 	Clusters      []string
 	OS            []string
-	Tags 		  map[string][]string
+	Tags          map[string][]string
 }
 
 type GenericFilterSpec struct {
@@ -57,14 +57,13 @@ func (ds *DataStore) GenericFiltering(filter string, opts FilterOptions, c conte
 
 	query := "SELECT DISTINCT RAW subquery." + column + " " + baseQuery + "WHERE subquery." + column + "!= \"\""
 	params := make(map[string]interface{})
-
-	for _, spec := range GenericFilterSpecs {
-		// Skip self-filtering so the options list for the active dimension can expand.
-		if spec.column == column {
-			continue
-		}
-		query, params = addFilterCondition(query, params, "subquery."+spec.column, spec.param, spec.values(opts))
-	}
+	query, params = addGenericFilterConditions(query, params, opts, map[string]string{
+		"component":   "subquery.component",
+		"category":    "subquery.category",
+		"subCategory": "subquery.subCategory",
+		"os":          "subquery.os",
+		"name":        "subquery.name",
+	}, map[string]bool{column: true})
 	query += ` ORDER BY subquery.` + column
 	return queryRows[string](ds.cluster, query, params, column, c)
 }
@@ -72,19 +71,15 @@ func (ds *DataStore) GenericFiltering(filter string, opts FilterOptions, c conte
 func (ds *DataStore) GetComponents(opts FilterOptions, c context.Context) ([]string, error) {
 	return ds.GenericFiltering("component", opts, c)
 }
-
 func (ds *DataStore) GetCategories(opts FilterOptions, c context.Context) ([]string, error) {
 	return ds.GenericFiltering("category", opts, c)
 }
-
 func (ds *DataStore) GetSubcategories(opts FilterOptions, c context.Context) ([]string, error) {
 	return ds.GenericFiltering("subCategory", opts, c)
 }
-
 func (ds *DataStore) GetOs(opts FilterOptions, c context.Context) ([]string, error) {
 	return ds.GenericFiltering("os", opts, c)
 }
-
 func (ds *DataStore) GetClusters(opts FilterOptions, c context.Context) ([]string, error) {
 	return ds.GenericFiltering("cluster", opts, c)
 }

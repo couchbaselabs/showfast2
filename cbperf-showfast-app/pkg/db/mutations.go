@@ -23,51 +23,24 @@ func (ds *DataStore) AddCluster(cluster models.Cluster, c context.Context) error
 }
 
 func (ds *DataStore) AddBenchmark(benchmark models.Benchmark, c context.Context) error {
-	queryStr := ` 
-				SELECT RAW META(b).id FROM benchmarks b
-				WHERE b.metric = $metric AND b.build = $build AND b.hidden = False
-				`
+	updateQuery := `
+		UPDATE benchmarks 
+		SET hidden = True 
+		WHERE metric = $metric AND build = $build AND hidden = False`
+	
 	params := map[string]interface{}{
 		"metric": benchmark.Metric,
 		"build":  benchmark.Build,
 	}
 
-	rows, err := ds.cluster.Query(queryStr, &gocb.QueryOptions{NamedParameters: params, Context: c})
-	if err != nil {
-		return fmt.Errorf("failed to execute query to check for existing benchmark: %v", err)
+	if _, err := ds.cluster.Query(updateQuery, &gocb.QueryOptions{NamedParameters: params, Context: c}); err != nil {
+		return fmt.Errorf("failed to hide previous benchmarks: %w", err)
 	}
-	defer rows.Close()
 
 	collection := ds.GetCollection("benchmarks")
-
-	var existingID string
-	for rows.Next() {
-		if err := rows.Row(&existingID); err != nil {
-			return fmt.Errorf("failed to read existing benchmark row: %v", err)
-		}
-		var existing models.Benchmark
-		getResult, err := collection.Get(existingID, &gocb.GetOptions{Context: c})
-		if err != nil {
-			return fmt.Errorf("failed to get existing benchmark %s: %v", existingID, err)
-		}
-		if err := getResult.Content(&existing); err != nil {
-			return fmt.Errorf("failed to read benchmark content %s: %v", existingID, err)
-		}
-		existing.Hidden = true
-		_, err = collection.Upsert(existingID, existing, &gocb.UpsertOptions{Context: c})
-		if err != nil {
-			return fmt.Errorf("failed to hide previous benchmark %s: %v", existingID, err)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("failed while reading benchmark query results: %v", err)
-	}
-
-	_, err = collection.Upsert(benchmark.ID, benchmark, &gocb.UpsertOptions{Context: c})
-	if err != nil {
-		return fmt.Errorf("failed to add benchmark with ID %s: %v", benchmark.ID, err)
-	}
-	return nil
+	_, err := collection.Upsert(benchmark.ID, benchmark, &gocb.UpsertOptions{Context: c})
+	
+	return err
 }
 
 func (ds *DataStore) ToggleBenchmarkHidden(benchmarkID string, c context.Context) error {

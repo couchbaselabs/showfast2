@@ -65,50 +65,25 @@ func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]inter
 
 func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context) (*[]models.TimelinePanel, error) {
 	type timelinePanelRow struct {
-		MetricID    string            `json:"metricId"`
-		Title       string            `json:"title"`
-		Component   string            `json:"component"`
-		Category    string            `json:"category"`
-		SubCategory string            `json:"subCategory"`
-		ClusterID   string            `json:"cluster"`
-		Tags        map[string]string `json:"tags,omitempty"`
-		ClusterName string            `json:"clusterName"`
-		ClusterOS   string            `json:"clusterOS"`
-		ClusterCPU  string            `json:"clusterCPU"`
-		ClusterDisk string            `json:"clusterDisk"`
-		ClusterMem  string            `json:"clusterMemory"`
+		models.TimelinePanel
 		Build       string            `json:"build"`
 		Value       float64           `json:"value"`
 	}
 
 	query := "SELECT m.id AS metricId, m.`title` AS title, m.component AS component, m.category AS category, "
 	query += "m.subCategory AS subCategory, m.`cluster` AS `cluster`, m.tags AS tags, "
-	query += "c.name AS clusterName, c.os AS clusterOS, c.cpu AS clusterCPU, c.disk AS clusterDisk, c.memory AS clusterMemory, "
+	query += "{\"name\": c.name, \"os\": c.os, \"cpu\": c.cpu, \"disk\": c.disk, \"memory\": c.memory} AS clusterInfo, "
 	query += "b.`build` AS `build`, b.`value` AS `value` "
 	query += "FROM metrics m JOIN benchmarks b ON m.id = b.metric JOIN `clusters` c ON c.name = m.`cluster` "
 	query += "WHERE b.hidden = False AND m.hidden = False"
 	params := make(map[string]interface{})
-
-	if len(filters.Components) > 0 {
-		query += " AND m.component IN $components"
-		params["components"] = filters.Components
-	}
-	if len(filters.Categories) > 0 {
-		query += " AND m.category IN $categories"
-		params["categories"] = filters.Categories
-	}
-	if len(filters.Subcategories) > 0 {
-		query += " AND m.subCategory IN $subcategories"
-		params["subcategories"] = filters.Subcategories
-	}
-	if len(filters.Clusters) > 0 {
-		query += " AND m.`cluster` IN $clusters"
-		params["clusters"] = filters.Clusters
-	}
-	if len(filters.OS) > 0 {
-		query += " AND c.os IN $os"
-		params["os"] = filters.OS
-	}
+	query, params = addGenericFilterConditions(query, params, *filters, map[string]string{
+		"component":   "m.component",
+		"category":    "m.category",
+		"subCategory": "m.subCategory",
+		"name":        "m.`cluster`",
+		"os":          "c.os",
+	}, nil)
 
 	tagClause, tagParams := buildTagFilters(filters.Tags)
 	query += tagClause
@@ -127,17 +102,8 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 	for _, row := range results {
 		panel, exists := panelMap[row.MetricID]
 		if !exists {
-			panel = &models.TimelinePanel{
-				MetricID:         row.MetricID,
-				Title:            row.Title,
-				Component:        row.Component,
-				Category:         row.Category,
-				SubCategory:      row.SubCategory,
-				ClusterID:        row.ClusterID,
-				ClusterInfo:      &models.Cluster{Name: row.ClusterName, OS: row.ClusterOS, CPU: row.ClusterCPU, Disk: row.ClusterDisk, Memory: row.ClusterMem},
-				Tags:             row.Tags,
-				BenchmarksValues: make([]models.TimelinePoint, 0),
-			}
+			panel = &row.TimelinePanel
+			panel.BenchmarksValues = make([]models.TimelinePoint, 0)
 			panelMap[row.MetricID] = panel
 			panelOrder = append(panelOrder, row.MetricID)
 		}
