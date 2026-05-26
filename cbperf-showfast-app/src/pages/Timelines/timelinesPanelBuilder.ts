@@ -13,6 +13,7 @@ function formatSubtitle(panel: TimelinePanel): string {
 
 export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
   const points = panel.benchmarksValues ?? [];
+  const snapshotLabels = points.map((p) => (p.snapshots && p.snapshots.length > 0 ? p.snapshots.join(', ') : ''));
 
   const frame: DataFrame = {
     name: panel.title,
@@ -28,8 +29,36 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
       {
         name: panel.title,
         type: FieldType.number,
-        config: {},
+        config: {
+          links: [
+            {
+              title: 'Open build URL',
+              url: '${__data.fields.buildUrl}',
+              targetBlank: true,
+            },
+          ],
+        },
         values: points.map((p) => p.value),
+      },
+      {
+        name: 'buildUrl',
+        type: FieldType.string,
+        config: {
+          custom: {
+            hideFrom: {
+              tooltip: true,
+              viz: true,
+              legend: true,
+            },
+          },
+        },
+        values: points.map((p) => p.buildUrl ?? ''),
+      },
+      {
+        name: 'snapshots',
+        type: FieldType.string,
+        config: {},
+        values: snapshotLabels,
       },
     ],
   };

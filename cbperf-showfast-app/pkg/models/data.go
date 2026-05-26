@@ -46,9 +46,16 @@ type TimelinePanel struct {
 	BenchmarksValues []TimelinePoint   `json:"benchmarksValues"`
 }
 
+type BuildInfo struct {
+	BuildURL 	string `json:"buildUrl"`
+	Snapshots 	[]string `json:"snapshots"`
+}
+
 type TimelinePoint struct {
-	Build string  `json:"build"`
-	Value float64 `json:"value"`
+	Build     string   `json:"build"`
+	Value     float64  `json:"value"`
+	BuildURL  string   `json:"buildUrl,omitempty"`
+	Snapshots []string `json:"snapshots,omitempty"`
 }
 
 type Run map[string]interface{}

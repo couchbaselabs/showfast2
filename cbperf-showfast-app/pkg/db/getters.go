@@ -66,14 +66,16 @@ func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]inter
 func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context) (*[]models.TimelinePanel, error) {
 	type timelinePanelRow struct {
 		models.TimelinePanel
-		Build string  `json:"build"`
-		Value float64 `json:"value"`
+		Build     string   `json:"build"`
+		Value     float64  `json:"value"`
+		BuildURL  string   `json:"buildUrl"`
+		Snapshots []string `json:"snapshots"`
 	}
 
 	query := "SELECT m.id AS metricId, m.`title` AS title, m.component AS component, m.category AS category, "
 	query += "m.subCategory AS subCategory, m.`cluster` AS `cluster`, m.tags AS tags, "
 	query += "{\"name\": c.name, \"os\": c.os, \"cpu\": c.cpu, \"disk\": c.disk, \"memory\": c.memory} AS clusterInfo, "
-	query += "b.`build` AS `build`, b.`value` AS `value` "
+	query += "b.`build` AS `build`, b.`value` AS `value`, b.`buildURL` AS `buildUrl` , b.`snapshots` as snapshots "
 	query += "FROM metrics m JOIN benchmarks b ON m.id = b.metric JOIN `clusters` c ON c.name = m.`cluster` "
 	query += "WHERE b.hidden = False AND m.hidden = False"
 	params := make(map[string]interface{})
@@ -108,8 +110,10 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 			panelOrder = append(panelOrder, row.MetricID)
 		}
 		panel.BenchmarksValues = append(panel.BenchmarksValues, models.TimelinePoint{
-			Build: row.Build,
-			Value: row.Value,
+			Build:     row.Build,
+			Value:     row.Value,
+			BuildURL:  row.BuildURL,
+			Snapshots: row.Snapshots,
 		})
 	}
 
