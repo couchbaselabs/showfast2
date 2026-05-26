@@ -4,6 +4,8 @@
  */
 
 import { QueryVariable } from '@grafana/scenes';
+import { Subject, from, EMPTY } from 'rxjs';
+import { auditTime, concatMap, catchError } from 'rxjs/operators';
 import { FILTER_DEFINITIONS, VariableName } from './filterConfig';
 import {
   buildVariableQuery,
@@ -47,46 +49,47 @@ export function createTimelineVariableController(
     return changed;
   };
 
-  let refreshInFlight = false;
-  let refreshQueued = false;
-
-  // Deterministic refresh pipeline:
-  // 1) sync variable queries
-  // 2) refresh dependent variable options
-  // 3) trigger external panel refresh callback once
   const runRefreshPipeline = async (): Promise<void> => {
-    if (refreshInFlight) {
-      refreshQueued = true;
-      return;
+    const changed = syncQueries();
+    if (changed.length > 0) {
+      await Promise.all(changed.map((v) => runVariableUpdate(v)));
     }
 
-    refreshInFlight = true;
-    do {
-      refreshQueued = false;
-
-      const changed = syncQueries();
-      if (changed.length > 0) {
-        await Promise.all(changed.map((v) => runVariableUpdate(v)));
-      }
-
-      if (onVariablesChanged) {
-        await onVariablesChanged();
-      }
-    } while (refreshQueued);
-
-    refreshInFlight = false;
+    if (onVariablesChanged) {
+      await onVariablesChanged();
+    }
   };
 
   variables[0].addActivationHandler(() => {
+    const refreshTrigger$ = new Subject<void>();
+
+    // Serialize refreshes and coalesce synchronous bursts from variable state updates.
+    const refreshSub = refreshTrigger$
+      .pipe(
+        auditTime(0),
+        concatMap(() =>
+          from(runRefreshPipeline()).pipe(
+            catchError(() => {
+              return EMPTY;
+            })
+          )
+        )
+      )
+      .subscribe();
+
     const subs = variables.map((variable) =>
       variable.subscribeToState(() => {
-        void runRefreshPipeline();
+        refreshTrigger$.next();
       })
     );
 
-    void runRefreshPipeline();
+    refreshTrigger$.next();
 
-    return () => subs.forEach((s) => s.unsubscribe());
+    return () => {
+      refreshSub.unsubscribe();
+      refreshTrigger$.complete();
+      subs.forEach((s) => s.unsubscribe());
+    };
   });
 
   return { variables };

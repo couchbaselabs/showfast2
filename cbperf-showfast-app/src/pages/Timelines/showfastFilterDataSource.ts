@@ -7,6 +7,7 @@ import { DataQueryRequest, DataQueryResponse, MetricFindValue } from '@grafana/d
 import { getBackendSrv } from '@grafana/runtime';
 import { RuntimeDataSource, registerRuntimeDataSource } from '@grafana/scenes';
 import { API_BASE_URL } from '../../constants';
+import { isIgnorableRequestError } from '../../utils/utils.requests';
 import {
   FILTER_DEFINITIONS,
   FilterEndpoint,
@@ -53,10 +54,17 @@ export class ShowfastFilterRuntimeDataSource extends RuntimeDataSource {
 
     const params = buildFilterParamsFromDependencies(dependencies);
     const qs = params.toString();
-    const url = `${API_BASE_URL}/utils/${endpoint}${qs ? `?${qs}` : ''}`;
+    const url = `${API_BASE_URL}/filters/${endpoint}${qs ? `?${qs}` : ''}`;
 
-    const values = await getBackendSrv().get<string[]>(url);
-    return values.map((value) => ({ text: value, value }));
+    try {
+      const values = await getBackendSrv().get<string[]>(url);
+      return values.map((value) => ({ text: value, value }));
+    } catch (error) {
+      if (isIgnorableRequestError(error)) {
+        return [];
+      }
+      throw error;
+    }
   }
 }
 

@@ -3,9 +3,9 @@
  * Manages template variable state and query building.
  */
 
-import { getTemplateSrv, locationService } from '@grafana/runtime';
+import { getTemplateSrv } from '@grafana/runtime';
 import { QueryVariable } from '@grafana/scenes';
-import { CleanUrlQueryVariable } from './cleanUrlQueryVariable';
+import { appendTagQueryParamsFromCurrentUrl } from '../../utils/utils.timelinesQueryParams';
 import {
   VariableName,
   FilterEndpoint,
@@ -60,74 +60,7 @@ export function buildFilterParamsFromDependencies(dependencies: VariableName[]):
     }
   });
 
-  return appendUrlTagParams(params);
-}
-
-/**
- * Append tag.* query params from the current page URL.
- */
-export function appendUrlTagParams(params: URLSearchParams): URLSearchParams {
-  const seen = new Set<string>();
-  const appendPair = (key: string, value: string) => {
-    const dedupeKey = `${key}=${value}`;
-    if (seen.has(dedupeKey)) {
-      return;
-    }
-    params.append(key, value);
-    seen.add(dedupeKey);
-  };
-
-  const appendIfValid = (key: string, value: string) => {
-    const trimmed = value.trim();
-    if (trimmed === '') {
-      return;
-    }
-
-    let tagKey = '';
-    if (key.startsWith('tag.')) {
-      tagKey = key.slice('tag.'.length);
-    } else if (key.startsWith('var-tag.')) {
-      tagKey = key.slice('var-tag.'.length);
-    }
-
-    if (tagKey === '') {
-      return;
-    }
-
-    appendPair(`tag.${tagKey}`, trimmed);
-  };
-
-  // Prefer Grafana's location state because it tracks the active route params.
-  const searchObject = locationService.getSearchObject() as Record<string, unknown>;
-  for (const [key, value] of Object.entries(searchObject)) {
-    if (!key.startsWith('tag.') && !key.startsWith('var-tag.')) {
-      continue;
-    }
-
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        if (typeof item === 'string') {
-          appendIfValid(key, item);
-        }
-      }
-      continue;
-    }
-
-    if (typeof value === 'string') {
-      appendIfValid(key, value);
-    }
-  }
-
-  if (typeof window === 'undefined') {
-    return params;
-  }
-
-  const pageParams = new URLSearchParams(window.location.search);
-  for (const [key, value] of pageParams.entries()) {
-    appendIfValid(key, value);
-  }
-
-  return params;
+  return appendTagQueryParamsFromCurrentUrl(params);
 }
 
 /**
@@ -138,7 +71,7 @@ export function createFilterVariable(
   label: string,
   endpoint: FilterEndpoint
 ): QueryVariable {
-  return new CleanUrlQueryVariable({
+  return new QueryVariable({
     name,
     label,
     datasource: {
@@ -149,7 +82,7 @@ export function createFilterVariable(
     isMulti: true,
     includeAll: true,
     defaultToAll: true,
-    allValue: '*',
+    allValue: 'All',
   });
 }
 

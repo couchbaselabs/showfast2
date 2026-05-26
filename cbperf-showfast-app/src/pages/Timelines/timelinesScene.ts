@@ -3,9 +3,10 @@
  * Keeps composition concerns in this file.
  */
 
+import React from 'react';
 import {
   EmbeddedScene,
-  PanelBuilders,
+  SceneReactObject,
   SceneControlsSpacer,
   SceneFlexItem,
   SceneFlexLayout,
@@ -13,9 +14,25 @@ import {
   VariableValueSelectors,
 } from '@grafana/scenes';
 import { ensureRuntimeDataSourceRegistered } from './showfastFilterDataSource';
-import { fetchTimelinePanels } from './timelinesPanelsService';
+import { fetchTimelineBarChartPanels } from './timelinesPanelsService';
 import { buildBarChartPanelItem } from './timelinesPanelBuilder';
+import { TimelinePanel } from './timelinesApiTypes';
 import { createTimelineVariableController } from './timelinesVariableController';
+
+type TimelinesSceneState =
+  | { kind: 'loading' }
+  | { kind: 'empty' }
+  | { kind: 'error'; message: string }
+  | { kind: 'ready'; panels: TimelinePanel[] };
+
+function buildMessageItem(message: string): SceneFlexItem {
+  return new SceneFlexItem({
+    minHeight: 64,
+    body: new SceneReactObject({
+      reactNode: React.createElement('div', { style: { padding: '8px 0' } }, message),
+    }),
+  });
+}
 
 /**
  * Build the Timelines scene with filter variables and placeholder content.
@@ -26,61 +43,45 @@ export function timelinesScene() {
 
   const body = new SceneFlexLayout({
     direction: 'column',
-    children: [
-      new SceneFlexItem({
-        minHeight: 120,
-        body: PanelBuilders.text()
-          .setTitle('Timelines')
-          .setDescription('Loading timeline panels...')
-          .build(),
-      }),
-    ],
+    children: [buildMessageItem('Loading timeline panels...')],
   });
 
   const toPanelItem = buildBarChartPanelItem;
 
-  const renderEmpty = () => {
-    body.setState({
-      children: [
-        new SceneFlexItem({
-          minHeight: 120,
-          body: PanelBuilders.text()
-            .setTitle('Timelines')
-            .setDescription('No timeline panels match the current filter selection.')
-            .build(),
-        }),
-      ],
-    });
-  };
+  const renderState = (state: TimelinesSceneState) => {
+    if (state.kind === 'ready') {
+      body.setState({
+        children: state.panels.map((panel) => toPanelItem(panel)),
+      });
+      return;
+    }
 
-  const renderError = (message: string) => {
+    const description =
+      state.kind === 'loading'
+        ? 'Loading timeline panels...'
+        : state.kind === 'empty'
+          ? 'No timeline panels match the current filter selection.'
+          : `Failed to load timeline panels: ${state.message}`;
+
     body.setState({
-      children: [
-        new SceneFlexItem({
-          minHeight: 120,
-          body: PanelBuilders.text()
-            .setTitle('Timelines')
-            .setDescription(`Failed to load timeline panels: ${message}`)
-            .build(),
-        }),
-      ],
+      children: [buildMessageItem(description)],
     });
   };
 
   const refreshPanels = async () => {
+    renderState({ kind: 'loading' });
+
     try {
-      const panels = await fetchTimelinePanels();
+      const panels = await fetchTimelineBarChartPanels();
       if (!panels || panels.length === 0) {
-        renderEmpty();
+        renderState({ kind: 'empty' });
         return;
       }
 
-      body.setState({
-        children: panels.map((panel) => toPanelItem(panel)),
-      });
+      renderState({ kind: 'ready', panels });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'unknown error';
-      renderError(message);
+      renderState({ kind: 'error', message });
     }
   };
 
