@@ -66,8 +66,8 @@ func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]inter
 func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context) (*[]models.TimelinePanel, error) {
 	type timelinePanelRow struct {
 		models.TimelinePanel
-		Build       string            `json:"build"`
-		Value       float64           `json:"value"`
+		Build string  `json:"build"`
+		Value float64 `json:"value"`
 	}
 
 	query := "SELECT m.id AS metricId, m.`title` AS title, m.component AS component, m.category AS category, "

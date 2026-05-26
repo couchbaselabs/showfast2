@@ -3,6 +3,7 @@ import { EmbeddedScene, SceneFlexItem, SceneFlexLayout, SceneReactObject } from 
 import { Button, LinkButton, Stack, useTheme2 } from '@grafana/ui';
 import { ROUTES } from '../../constants';
 import { prefixRoute } from '../../utils/utils.routing';
+import { buildSummaryDashboardScene } from './summaryDashboardBuilder';
 
 type LinkItem = {
   title: string;
@@ -33,6 +34,7 @@ const futureLinks: LinkItem[] = [
 
 function LandingContent() {
   const theme = useTheme2();
+  const [summaryScene] = React.useState(() => buildSummaryDashboardScene());
 
   return (
     <div
@@ -112,6 +114,20 @@ function LandingContent() {
               </div>
             ))}
           </Stack>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: theme.spacing(2) }}>Recent activity summary</div>
+          <div
+            style={{
+              padding: theme.spacing(3),
+              borderRadius: theme.shape.radius.default,
+              border: `1px solid ${theme.colors.border.weak}`,
+              background: theme.colors.background.primary,
+            }}
+          >
+            <summaryScene.Component model={summaryScene} />
+          </div>
         </div>
 
         <div>
