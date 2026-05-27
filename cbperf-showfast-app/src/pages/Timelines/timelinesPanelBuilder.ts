@@ -1,4 +1,4 @@
-import { DataFrame, FieldType, LoadingState, PanelData, dateTime } from '@grafana/data';
+import { DataFrame, Field, FieldType, LoadingState, PanelData, dateTime } from '@grafana/data';
 import { PanelBuilders, SceneDataNode, SceneFlexItem } from '@grafana/scenes';
 import { VizOrientation, VisibilityMode } from '@grafana/schema';
 import { TimelinePanel } from './timelinesApiTypes';
@@ -11,9 +11,29 @@ function formatSubtitle(panel: TimelinePanel): string {
   return `${c.name} | ${c.os} | ${c.cpu} | ${c.memory} | ${c.disk}`;
 }
 
+function formatSnapshotReportUrl(snapshotId: string): string {
+  if (snapshotId.includes('_')) {
+    return `http://cbmonitor.sc.couchbase.com/reports/html/?snapshot=${encodeURIComponent(snapshotId)}`;
+  }
+
+  return `https://cbmonitor2.sc.couchbase.com/a/cbmonitor/snapshots/${encodeURIComponent(snapshotId)}`;
+}
+
 export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
   const points = panel.benchmarksValues ?? [];
-  const snapshotLabels = points.map((p) => (p.snapshots && p.snapshots.length > 0 ? p.snapshots.join(', ') : ''));
+  const snapshotIds = points.map((p) => (p.snapshots ?? []).filter((value) => value.length > 0));
+  const maxSnapshotCount = snapshotIds.reduce((maxCount, ids) => Math.max(maxCount, ids.length), 0);
+  const snapshotLinks = Array.from({ length: maxSnapshotCount }, (_, index) => ({
+    title: `${index + 1}`,
+    url: `\${__data.fields.snapshotReportUrl${index + 1}}`,
+    targetBlank: true,
+  }));
+  const snapshotUrlFields: Field[] = Array.from({ length: maxSnapshotCount }, (_, index) => ({
+    name: `snapshotReportUrl${index + 1}`,
+    type: FieldType.string,
+    config: {},
+    values: snapshotIds.map((ids) => (ids[index] ? formatSnapshotReportUrl(ids[index]) : '')),
+  }));
 
   const frame: DataFrame = {
     name: panel.title,
@@ -36,6 +56,7 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
               url: '${__data.fields.buildUrl}',
               targetBlank: true,
             },
+            ...snapshotLinks,
           ],
         },
         values: points.map((p) => p.value),
@@ -43,23 +64,16 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
       {
         name: 'buildUrl',
         type: FieldType.string,
-        config: {
-          custom: {
-            hideFrom: {
-              tooltip: true,
-              viz: true,
-              legend: true,
-            },
-          },
-        },
+        config: {},
         values: points.map((p) => p.buildUrl ?? ''),
       },
       {
         name: 'snapshots',
         type: FieldType.string,
         config: {},
-        values: snapshotLabels,
+        values: snapshotIds.map((ids) => ids.join(', ')),
       },
+      ...snapshotUrlFields,
     ],
   };
 
@@ -78,6 +92,25 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
     .setTitle(panel.title)
     .setDescription(formatSubtitle(panel))
     .setData(new SceneDataNode({ data: panelData }))
+    .setOverrides((b) => {
+      b.matchFieldsWithName('buildUrl').overrideCustomFieldConfig('hideFrom', {
+        tooltip: true,
+        viz: true,
+        legend: true,
+      });
+      b.matchFieldsWithName('snapshots').overrideCustomFieldConfig('hideFrom', {
+        tooltip: true,
+        viz: true,
+        legend: true,
+      });
+      for (let index = 0; index < maxSnapshotCount; index++) {
+        b.matchFieldsWithName(`snapshotReportUrl${index + 1}`).overrideCustomFieldConfig('hideFrom', {
+          tooltip: true,
+          viz: true,
+          legend: true,
+        });
+      }
+    })
     .setOption('orientation', VizOrientation.Vertical)
     .setOption('xField', 'build')
     .setOption('xTickLabelRotation', 45)
