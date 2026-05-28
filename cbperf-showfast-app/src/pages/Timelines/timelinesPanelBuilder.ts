@@ -113,7 +113,7 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
     })
     .setOption('orientation', VizOrientation.Vertical)
     .setOption('xField', 'build')
-    .setOption('xTickLabelRotation', 45)
+    .setOption('xTickLabelRotation', 15)
     .setOption('barWidth', 0.7)
     .setOption('showValue', VisibilityMode.Always)
     .build();
