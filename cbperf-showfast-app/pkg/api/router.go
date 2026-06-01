@@ -12,14 +12,17 @@ func SetupRouter(ds *db.DataStore) *gin.Engine {
 	router.GET("/builds", h.GetBuildsV2)
 	router.GET("/metrics", h.GetMetricsV2)
 	router.GET("/benchmarks", h.GetBenchmarksV2)
-	router.GET("/timeline/:metricId", h.GetTimelineV2)
-	router.GET("/timelines/panels", h.GetTimelinePanelsV2)
 	router.GET("/runs", h.GetRunsV2)
-	router.GET("/filters", h.GetFiltersV2)
-	router.GET("/cluster/:clusterName", h.GetClusterInfoV2)
+	router.GET("/timeline/:metricId", h.GetTimelineV2)
+	router.GET("/timeline", h.GetTimelinePanelsV2)
+	router.GET("/timelines/panels", h.GetTimelinePanelsV2)
+	router.GET("/cluster/:clusterId", h.GetClusterInfoV2)
 
 	router.POST("/metrics", h.AddMetricV2)
 	router.POST("/clusters", h.AddClusterV2)
+	router.POST("/tests", h.AddTestV2)
+	router.POST("/builds", h.AddBuildV2)
+	router.POST("/runs", h.AddRunV2)
 	router.POST("/benchmarks", h.AddBenchmarkV2)
 
 	router.PATCH("/benchmarks", h.UpdateBenchmarkV2)
@@ -28,11 +31,14 @@ func SetupRouter(ds *db.DataStore) *gin.Engine {
 
 	filters := router.Group("/filters")
 	{
+		filters.GET("", h.GetFiltersV2)
 		filters.GET("/components", h.GetComponentsV2)
 		filters.GET("/categories", h.GetCategoriesV2)
 		filters.GET("/subcategories", h.GetSubcategoriesV2)
 		filters.GET("/clusters", h.GetClustersV2)
 		filters.GET("/os", h.GetOsV2)
+		filters.GET("/pipeline-groups", h.GetPipelineGroupsV2)
+		filters.GET("/server-major-minors", h.GetServerMajorMinorsV2)
 	}
 
 	summary := router.Group("/summary")

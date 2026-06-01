@@ -10,49 +10,29 @@ import (
 var validTagKey = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
 func (ds *DataStore) GetMetrics(components []string, tags map[string][]string, c context.Context) ([]models.Metric, error) {
-	queryStr := `SELECT m.* FROM metrics m WHERE m.hidden = False`
+	queryStr := `SELECT m.* FROM ` + metricsKeyspace + ` m WHERE m.hidden = False`
 	params := make(map[string]interface{})
-
-	if len(components) > 0 {
-		queryStr += ` AND m.component IN $components`
-		params["components"] = components
-	}
-
-	tagClause, tagParams := buildTagFilters(tags)
-	queryStr += tagClause
-	for k, v := range tagParams {
-		params[k] = v
-	}
+	queryStr, params = addComponentAndTagFilterConditions(queryStr, params, components, tags)
 	queryStr += ` ORDER BY m.category`
 	return queryRows[models.Metric](ds.cluster, queryStr, params, "metric", c)
 }
 
 func (ds *DataStore) GetBenchmarks(components []string, tags map[string][]string, c context.Context) ([]models.Benchmark, error) {
-	queryStr := "SELECT b.* FROM benchmarks b JOIN metrics m ON KEYS b.metric WHERE b.hidden = False"
+	queryStr := "SELECT b.* FROM " + benchmarksKeyspace + " b JOIN " + metricsKeyspace + " m ON KEYS b.metric JOIN " + runsKeyspace + " r ON KEYS b.runId WHERE b.hidden = False AND r.status = 'completed'"
 	params := make(map[string]interface{})
-
-	if len(components) > 0 {
-		queryStr += ` AND m.component IN $components`
-		params["components"] = components
-	}
-
-	tagClause, tagParams := buildTagFilters(tags)
-	queryStr += tagClause
-	for k, v := range tagParams {
-		params[k] = v
-	}
+	queryStr, params = addComponentAndTagFilterConditions(queryStr, params, components, tags)
 
 	queryStr += " ORDER BY b.dateTime DESC"
 	return queryRows[models.Benchmark](ds.cluster, queryStr, params, "benchmark", c)
 }
 
 func (ds *DataStore) GetBuilds(c context.Context) ([]string, error) {
-	query := "SELECT DISTINCT RAW b.`build` FROM benchmarks b WHERE b.hidden = False ORDER BY " + semanticBuildOrder("b.`build`", "DESC")
+	query := "SELECT DISTINCT RAW b.version FROM " + buildsKeyspace + " b WHERE b.component = 'server' ORDER BY " + semanticBuildOrder("b.version", "DESC")
 	return queryRows[string](ds.cluster, query, nil, "build", c)
 }
 
 func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]interface{}, error) {
-	query := "SELECT RAW [b.`build`, b.`value`] FROM benchmarks b WHERE b.metric = $metricID AND b.hidden = False ORDER BY " + semanticBuildOrder("b.`build`", "DESC")
+	query := "SELECT RAW [b.`build`, b.`value`] FROM " + benchmarksKeyspace + " b JOIN " + runsKeyspace + " r ON KEYS b.runId WHERE b.metric = $metricID AND b.hidden = False AND r.status = 'completed' ORDER BY " + semanticBuildOrder("b.`build`", "DESC")
 	params := map[string]interface{}{
 		"metricID": metricID,
 	}
@@ -73,18 +53,20 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 	}
 
 	query := "SELECT m.id AS metricId, m.`title` AS title, m.component AS component, m.category AS category, "
-	query += "m.subCategory AS subCategory, m.`cluster` AS `cluster`, m.tags AS tags, "
-	query += "{\"name\": c.name, \"os\": c.os, \"cpu\": c.cpu, \"disk\": c.disk, \"memory\": c.memory} AS clusterInfo, "
-	query += "b.`build` AS `build`, b.`value` AS `value`, b.`buildURL` AS `buildUrl` , b.`snapshots` as snapshots "
-	query += "FROM metrics m JOIN benchmarks b ON m.id = b.metric JOIN `clusters` c ON c.name = m.`cluster` "
-	query += "WHERE b.hidden = False AND m.hidden = False"
+	query += "m.subCategory AS subCategory, r.clusterId AS `cluster`, m.tags AS tags, "
+	query += "{\"name\": c.name, \"os\": CASE WHEN c.os.distro IS NOT MISSING AND c.os.version IS NOT MISSING THEN c.os.distro || '-' || c.os.version WHEN c.os.distro IS NOT MISSING THEN c.os.distro ELSE TO_STRING(c.os) END, \"cpu\": c.cpu, \"disk\": c.disk, \"memory\": c.memory} AS clusterInfo, "
+	query += "b.`build` AS `build`, b.`value` AS `value`, r.`buildURL` AS `buildUrl` , b.`snapshots` as snapshots "
+	query += "FROM " + benchmarksKeyspace + " b JOIN " + runsKeyspace + " r ON KEYS b.runId JOIN " + metricsKeyspace + " m ON KEYS b.metric JOIN " + clustersKeyspace + " c ON KEYS r.clusterId "
+	query += "WHERE b.hidden = False AND m.hidden = False AND r.status = 'completed'"
 	params := make(map[string]interface{})
 	query, params = addGenericFilterConditions(query, params, *filters, map[string]string{
-		"component":   "m.component",
-		"category":    "m.category",
-		"subCategory": "m.subCategory",
-		"name":        "m.`cluster`",
-		"os":          "c.os",
+		"component":        "m.component",
+		"category":         "m.category",
+		"subCategory":      "m.subCategory",
+		"name":             "c.name",
+		"os":               "CASE WHEN c.os.distro IS NOT MISSING AND c.os.version IS NOT MISSING THEN c.os.distro || '-' || c.os.version WHEN c.os.distro IS NOT MISSING THEN c.os.distro ELSE TO_STRING(c.os) END",
+		"pipelineGroup":    "b.pipelineGroup",
+		"serverMajorMinor": "b.serverMajorMinor",
 	}, nil)
 
 	tagClause, tagParams := buildTagFilters(filters.Tags)
@@ -126,7 +108,7 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 }
 
 func (ds *DataStore) GetAllRuns(metricID string, build string, c context.Context) ([]models.Run, error) {
-	query := "SELECT b.* FROM benchmarks b WHERE b.metric = $metricID AND b.`build` = $build ORDER BY b.dateTime DESC"
+	query := "SELECT RAW r FROM " + benchmarksKeyspace + " b JOIN " + runsKeyspace + " r ON KEYS b.runId WHERE b.metric = $metricID AND b.`build` = $build AND r.status = 'completed' ORDER BY r.dateTime DESC"
 	params := map[string]interface{}{
 		"metricID": metricID,
 		"build":    build,
@@ -134,10 +116,10 @@ func (ds *DataStore) GetAllRuns(metricID string, build string, c context.Context
 	return queryRows[models.Run](ds.cluster, query, params, "run", c)
 }
 
-func (ds *DataStore) GetClusterInfo(name string, c context.Context) (*models.Cluster, error) {
-	query := "SELECT c.* FROM clusters c WHERE c.name = $name"
+func (ds *DataStore) GetClusterInfo(clusterID string, c context.Context) (*models.Cluster, error) {
+	query := "SELECT c.* FROM " + clustersKeyspace + " c USE KEYS $clusterID"
 	params := map[string]interface{}{
-		"name": name,
+		"clusterID": clusterID,
 	}
 	results, err := queryRows[models.Cluster](ds.cluster, query, params, "cluster", c)
 	if err != nil {

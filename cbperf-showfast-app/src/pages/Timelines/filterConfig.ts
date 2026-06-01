@@ -4,10 +4,12 @@
  */
 
 export const FILTER_DEFINITIONS = [
+  { name: 'serverMajorMinor', label: 'Server Major.Minor', endpoint: 'server-major-minors', queryKey: 'serverMajorMinor' },
+  { name: 'pipelineGroup', label: 'Pipeline Group', endpoint: 'pipeline-groups', queryKey: 'pipelineGroup' },
+  { name: 'os', label: 'OS', endpoint: 'os', queryKey: 'os' },
   { name: 'component', label: 'Component', endpoint: 'components', queryKey: 'component' },
   { name: 'category', label: 'Category', endpoint: 'categories', queryKey: 'category' },
   { name: 'subcategory', label: 'Subcategory', endpoint: 'subcategories', queryKey: 'subcategory' },
-  { name: 'os', label: 'OS', endpoint: 'os', queryKey: 'os' },
   { name: 'cluster', label: 'Cluster', endpoint: 'clusters', queryKey: 'cluster' },
 ] as const;
 

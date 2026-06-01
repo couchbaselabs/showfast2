@@ -12,7 +12,18 @@ type DataStore struct {
 	collections map[string]*gocb.Collection
 }
 
-var couchbaseBuckets = []string{"benchmarks", "metrics", "clusters"}
+const (
+	couchbaseBucketName = "showfast"
+	couchbaseScopeName  = "showfast"
+	benchmarksKeyspace  = "`showfast`.`showfast`.`benchmarks`"
+	metricsKeyspace     = "`showfast`.`showfast`.`metrics`"
+	clustersKeyspace    = "`showfast`.`showfast`.`clusters`"
+	runsKeyspace        = "`showfast`.`showfast`.`runs`"
+	testsKeyspace       = "`showfast`.`showfast`.`tests`"
+	buildsKeyspace      = "`showfast`.`showfast`.`builds`"
+)
+
+var couchbaseCollections = []string{"benchmarks", "metrics", "clusters", "runs", "tests", "builds"}
 
 const couchbaseReadyTimeout = 30 * time.Second
 
@@ -41,12 +52,14 @@ func NewDataStore(connString, username, password string) (*DataStore, error) {
 		collections: make(map[string]*gocb.Collection),
 	}
 
-	for _, bucketName := range couchbaseBuckets {
-		bucket := cluster.Bucket(bucketName)
-		if err := bucket.WaitUntilReady(couchbaseReadyTimeout, nil); err != nil {
-			return nil, fmt.Errorf("Failed to open Couchbase bucket %s: %v", bucketName, err)
-		}
-		ds.collections[bucketName] = bucket.DefaultCollection()
+	bucket := cluster.Bucket(couchbaseBucketName)
+	if err := bucket.WaitUntilReady(couchbaseReadyTimeout, nil); err != nil {
+		return nil, fmt.Errorf("Failed to open Couchbase bucket %s: %v", couchbaseBucketName, err)
+	}
+
+	scope := bucket.Scope(couchbaseScopeName)
+	for _, collectionName := range couchbaseCollections {
+		ds.collections[collectionName] = scope.Collection(collectionName)
 	}
 
 	return ds, nil

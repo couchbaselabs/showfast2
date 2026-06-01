@@ -4,15 +4,17 @@ import (
 	"context"
 )
 
-const baseQuery = "FROM (SELECT b.`value`, b.`build`, m.`title`, m.component, m.category, m.subCategory, c.os, c.cpu, c.name FROM `benchmarks` as b JOIN `metrics` as m ON b.metric = m.id JOIN `clusters` as c ON m.`cluster` = c.name WHERE b.hidden = false AND m.hidden = false) as subquery "
+const baseQuery = "FROM (SELECT b.`value`, b.`build`, b.pipelineGroup, b.serverMajorMinor, m.`title`, m.component, m.category, m.subCategory, CASE WHEN c.os.distro IS NOT MISSING AND c.os.version IS NOT MISSING THEN c.os.distro || '-' || c.os.version WHEN c.os.distro IS NOT MISSING THEN c.os.distro ELSE TO_STRING(c.os) END AS os, c.cpu, c.name FROM " + benchmarksKeyspace + " b JOIN " + runsKeyspace + " r ON KEYS b.runId JOIN " + metricsKeyspace + " m ON KEYS b.metric JOIN " + clustersKeyspace + " c ON KEYS r.clusterId WHERE b.hidden = false AND m.hidden = false AND r.status = 'completed') as subquery "
 
 type FilterOptions struct {
-	Components    []string
-	Categories    []string
-	Subcategories []string
-	Clusters      []string
-	OS            []string
-	Tags          map[string][]string
+	Components        []string
+	Categories        []string
+	Subcategories     []string
+	Clusters          []string
+	OS                []string
+	PipelineGroups    []string
+	ServerMajorMinors []string
+	Tags              map[string][]string
 }
 
 type GenericFilterSpec struct {
@@ -47,6 +49,16 @@ var GenericFilterSpecs = []GenericFilterSpec{
 		param:  "clusters",
 		values: func(opts FilterOptions) []string { return opts.Clusters },
 	},
+	{
+		column: "pipelineGroup",
+		param:  "pipelineGroups",
+		values: func(opts FilterOptions) []string { return opts.PipelineGroups },
+	},
+	{
+		column: "serverMajorMinor",
+		param:  "serverMajorMinors",
+		values: func(opts FilterOptions) []string { return opts.ServerMajorMinors },
+	},
 }
 
 func (ds *DataStore) GenericFiltering(filter string, opts FilterOptions, c context.Context) ([]string, error) {
@@ -58,11 +70,13 @@ func (ds *DataStore) GenericFiltering(filter string, opts FilterOptions, c conte
 	query := "SELECT DISTINCT RAW subquery." + column + " " + baseQuery + "WHERE subquery." + column + "!= \"\""
 	params := make(map[string]interface{})
 	query, params = addGenericFilterConditions(query, params, opts, map[string]string{
-		"component":   "subquery.component",
-		"category":    "subquery.category",
-		"subCategory": "subquery.subCategory",
-		"os":          "subquery.os",
-		"name":        "subquery.name",
+		"component":        "subquery.component",
+		"category":         "subquery.category",
+		"subCategory":      "subquery.subCategory",
+		"os":               "subquery.os",
+		"name":             "subquery.name",
+		"pipelineGroup":    "subquery.pipelineGroup",
+		"serverMajorMinor": "subquery.serverMajorMinor",
 	}, map[string]bool{column: true})
 	query += ` ORDER BY subquery.` + column
 	return queryRows[string](ds.cluster, query, params, column, c)
@@ -83,6 +97,12 @@ func (ds *DataStore) GetOs(opts FilterOptions, c context.Context) ([]string, err
 func (ds *DataStore) GetClusters(opts FilterOptions, c context.Context) ([]string, error) {
 	return ds.GenericFiltering("cluster", opts, c)
 }
+func (ds *DataStore) GetPipelineGroups(opts FilterOptions, c context.Context) ([]string, error) {
+	return ds.GenericFiltering("pipelineGroup", opts, c)
+}
+func (ds *DataStore) GetServerMajorMinors(opts FilterOptions, c context.Context) ([]string, error) {
+	return ds.GenericFiltering("serverMajorMinor", opts, c)
+}
 
 func (ds *DataStore) GetFilters(c context.Context) (*map[string][]string, error) {
 	type tagDef struct {
@@ -92,7 +112,7 @@ func (ds *DataStore) GetFilters(c context.Context) (*map[string][]string, error)
 
 	tagQuery := `
 		SELECT k, v
-		FROM metrics m
+		FROM ` + metricsKeyspace + ` m
 		UNNEST OBJECT_PAIRS(m.tags) AS entry
 		LET k = entry.name,
 		    v = entry.val

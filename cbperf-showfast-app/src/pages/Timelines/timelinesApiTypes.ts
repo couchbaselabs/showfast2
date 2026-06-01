@@ -31,10 +31,12 @@ export interface TimelinePanel {
 }
 
 export interface TimelinePanelsQuery {
+  serverMajorMinor?: string[];
+  pipelineGroup?: string[];
+  os?: string[];
   component?: string[];
   category?: string[];
   subcategory?: string[];
   cluster?: string[];
-  os?: string[];
   tags?: Record<string, string[]>;
 }

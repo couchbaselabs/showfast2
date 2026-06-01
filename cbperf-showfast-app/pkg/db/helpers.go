@@ -10,9 +10,9 @@ import (
 
 // queryRows executes a query and reads all rows into a slice, with consistent error handling
 func queryRows[T any](cluster *gocb.Cluster, query string, params map[string]interface{}, rowErrorMsg string, c context.Context) ([]T, error) {
-	var queryOpts *gocb.QueryOptions
+	queryOpts := &gocb.QueryOptions{Context: c}
 	if params != nil {
-		queryOpts = &gocb.QueryOptions{NamedParameters: params, Context: c}
+		queryOpts.NamedParameters = params
 	}
 
 	results, err := cluster.Query(query, queryOpts)
@@ -66,6 +66,18 @@ func addFilterCondition(query string, params map[string]interface{}, fieldName s
 	return query, params
 }
 
+func addComponentAndTagFilterConditions(query string, params map[string]interface{}, components []string, tags map[string][]string) (string, map[string]interface{}) {
+	query, params = addFilterCondition(query, params, "m.component", "components", components)
+
+	tagClause, tagParams := buildTagFilters(tags)
+	query += tagClause
+	for k, v := range tagParams {
+		params[k] = v
+	}
+
+	return query, params
+}
+
 func addGenericFilterConditions(query string, params map[string]interface{}, opts FilterOptions, fieldNames map[string]string, skipColumns map[string]bool) (string, map[string]interface{}) {
 	for _, spec := range GenericFilterSpecs {
 		if skipColumns != nil && skipColumns[spec.column] {
@@ -96,6 +108,10 @@ func normalizeGenericFilterColumn(filter string) (string, error) {
 		return "os", nil
 	case "cluster", "clusters", "name":
 		return "name", nil
+	case "pipelinegroup", "pipeline_group", "pipelineGroup":
+		return "pipelineGroup", nil
+	case "servermajorminor", "server_major_minor", "serverMajorMinor":
+		return "serverMajorMinor", nil
 	default:
 		return "", fmt.Errorf("unsupported filter: %s", filter)
 	}
