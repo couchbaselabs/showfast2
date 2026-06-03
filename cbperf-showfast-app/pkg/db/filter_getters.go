@@ -125,21 +125,9 @@ func (ds *DataStore) GetFilters(c context.Context) (*map[string][]string, error)
 		return nil, err
 	}
 
-	tagMap := make(map[string]map[string]bool)
-	for _, tag := range tagRows {
-		if _, ok := tagMap[tag.Key]; !ok {
-			tagMap[tag.Key] = make(map[string]bool)
-		}
-		tagMap[tag.Key][tag.Value] = true
-	}
-
 	tags := make(map[string][]string)
-	for key, valueMap := range tagMap {
-		values := make([]string, 0, len(valueMap))
-		for value := range valueMap {
-			values = append(values, value)
-		}
-		tags[key] = values
+	for _, tag := range tagRows {
+		tags[tag.Key] = append(tags[tag.Key], tag.Value)
 	}
 
 	return &tags, nil

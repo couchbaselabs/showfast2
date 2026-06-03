@@ -3,6 +3,8 @@ package db
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/couchbase/gocb/v2"
@@ -132,4 +134,74 @@ func semanticBuildOrder(buildField, direction string) string {
 		buildField, "ASC",
 		buildField, direction,
 	)
+}
+
+func compareSemanticBuild(a, b string) int {
+	pa, okA := parseSemanticBuild(a)
+	pb, okB := parseSemanticBuild(b)
+
+	if okA && okB {
+		if pa[0] != pb[0] {
+			return pa[0] - pb[0]
+		}
+		if pa[1] != pb[1] {
+			return pa[1] - pb[1]
+		}
+		if pa[2] != pb[2] {
+			return pa[2] - pb[2]
+		}
+		if pa[3] != pb[3] {
+			return pa[3] - pb[3]
+		}
+		return 0
+	}
+
+	if okA != okB {
+		if okA {
+			return 1
+		}
+		return -1
+	}
+
+	return strings.Compare(a, b)
+}
+
+func parseSemanticBuild(build string) ([4]int, bool) {
+	var parts [4]int
+
+	dashSplit := strings.Split(build, "-")
+	if len(dashSplit) != 2 {
+		return parts, false
+	}
+
+	versionSplit := strings.Split(dashSplit[0], ".")
+	if len(versionSplit) != 3 {
+		return parts, false
+	}
+
+	major, err := strconv.Atoi(versionSplit[0])
+	if err != nil {
+		return parts, false
+	}
+	minor, err := strconv.Atoi(versionSplit[1])
+	if err != nil {
+		return parts, false
+	}
+	patch, err := strconv.Atoi(versionSplit[2])
+	if err != nil {
+		return parts, false
+	}
+	buildNo, err := strconv.Atoi(dashSplit[1])
+	if err != nil {
+		return parts, false
+	}
+
+	parts[0], parts[1], parts[2], parts[3] = major, minor, patch, buildNo
+	return parts, true
+}
+
+func sortBuildStringsDesc(builds []string) {
+	sort.SliceStable(builds, func(i, j int) bool {
+		return compareSemanticBuild(builds[i], builds[j]) > 0
+	})
 }

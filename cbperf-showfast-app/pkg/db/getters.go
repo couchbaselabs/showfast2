@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"regexp"
+	"sort"
 
 	"github.com/cbperf/showfast/pkg/models"
 )
@@ -27,12 +28,18 @@ func (ds *DataStore) GetBenchmarks(components []string, tags map[string][]string
 }
 
 func (ds *DataStore) GetBuilds(c context.Context) ([]string, error) {
-	query := "SELECT DISTINCT RAW b.version FROM " + buildsKeyspace + " b WHERE b.component = 'server' ORDER BY " + semanticBuildOrder("b.version", "DESC")
-	return queryRows[string](ds.cluster, query, nil, "build", c)
+	query := "SELECT DISTINCT RAW b.version FROM " + buildsKeyspace + " b WHERE b.component = 'server'"
+	results, err := queryRows[string](ds.cluster, query, nil, "build", c)
+	if err != nil {
+		return nil, err
+	}
+
+	sortBuildStringsDesc(results)
+	return results, nil
 }
 
 func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]interface{}, error) {
-	query := "SELECT RAW [b.`build`, b.`value`] FROM " + benchmarksKeyspace + " b JOIN " + runsKeyspace + " r ON KEYS b.runId WHERE b.metric = $metricID AND b.hidden = False AND r.status = 'completed' ORDER BY " + semanticBuildOrder("b.`build`", "DESC")
+	query := "SELECT RAW [b.`build`, b.`value`] FROM " + benchmarksKeyspace + " b JOIN " + runsKeyspace + " r ON KEYS b.runId WHERE b.metric = $metricID AND b.hidden = False AND r.status = 'completed'"
 	params := map[string]interface{}{
 		"metricID": metricID,
 	}
@@ -40,6 +47,23 @@ func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]inter
 	if err != nil {
 		return nil, err
 	}
+
+	sort.SliceStable(results, func(i, j int) bool {
+		var buildI, buildJ string
+		if len(results[i]) > 0 {
+			if val, ok := results[i][0].(string); ok {
+				buildI = val
+			}
+		}
+		if len(results[j]) > 0 {
+			if val, ok := results[j][0].(string); ok {
+				buildJ = val
+			}
+		}
+
+		return compareSemanticBuild(buildI, buildJ) > 0
+	})
+
 	return &results, nil
 }
 
@@ -75,7 +99,7 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 		params[k] = v
 	}
 
-	query += " ORDER BY m.component, m.category, m.subCategory, m.title ASC, " + semanticBuildOrder("b.`build`", "DESC")
+	query += " ORDER BY m.component, m.category, m.subCategory, m.title ASC"
 	results, err := queryRows[timelinePanelRow](ds.cluster, query, params, "timeline panel", c)
 	if err != nil {
 		return nil, err
@@ -101,6 +125,9 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 
 	panels := make([]models.TimelinePanel, 0, len(panelOrder))
 	for _, metricID := range panelOrder {
+		sort.SliceStable(panelMap[metricID].BenchmarksValues, func(i, j int) bool {
+			return compareSemanticBuild(panelMap[metricID].BenchmarksValues[i].Build, panelMap[metricID].BenchmarksValues[j].Build) > 0
+		})
 		panels = append(panels, *panelMap[metricID])
 	}
 
@@ -108,7 +135,7 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 }
 
 func (ds *DataStore) GetAllRuns(metricID string, build string, c context.Context) ([]models.Run, error) {
-	query := "SELECT RAW r FROM " + benchmarksKeyspace + " b JOIN " + runsKeyspace + " r ON KEYS b.runId WHERE b.metric = $metricID AND b.`build` = $build AND r.status = 'completed' ORDER BY r.dateTime DESC"
+	query := "SELECT DISTINCT RAW r FROM " + benchmarksKeyspace + " b JOIN " + runsKeyspace + " r ON KEYS b.runId WHERE b.metric = $metricID AND b.`build` = $build AND r.status = 'completed' ORDER BY r.dateTime DESC"
 	params := map[string]interface{}{
 		"metricID": metricID,
 		"build":    build,

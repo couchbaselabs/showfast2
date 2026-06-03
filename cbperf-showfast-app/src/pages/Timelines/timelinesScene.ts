@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { Button } from '@grafana/ui';
 import {
   EmbeddedScene,
   SceneReactObject,
@@ -85,13 +86,25 @@ export function timelinesScene() {
     }
   };
 
-  const controller = createTimelineVariableController(() => {
-    return refreshPanels();
+  const controller = createTimelineVariableController();
+
+  const applyFiltersControl = new SceneReactObject({
+    reactNode: React.createElement(Button, {
+      variant: 'primary',
+      size: 'sm',
+      icon: 'sync',
+      onClick: () => {
+        void refreshPanels();
+      },
+      children: 'Apply',
+    }),
   });
+
+  void refreshPanels();
 
   return new EmbeddedScene({
     $variables: new SceneVariableSet({ variables: controller.variables }),
     body,
-    controls: [new VariableValueSelectors({}), new SceneControlsSpacer()],
+    controls: [new VariableValueSelectors({}), new SceneControlsSpacer(), applyFiltersControl],
   });
 }

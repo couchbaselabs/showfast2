@@ -27,9 +27,7 @@ function runVariableUpdate(variable: QueryVariable): Promise<void> {
   });
 }
 
-export function createTimelineVariableController(
-  onVariablesChanged?: () => void | Promise<void>
-): TimelineVariableController {
+export function createTimelineVariableController(): TimelineVariableController {
   const variableMap = FILTER_DEFINITIONS.reduce((acc, definition) => {
     acc[definition.name] = createFilterVariable(definition.name, definition.label, definition.endpoint);
     return acc;
@@ -53,10 +51,6 @@ export function createTimelineVariableController(
     const changed = syncQueries();
     if (changed.length > 0) {
       await Promise.all(changed.map((v) => runVariableUpdate(v)));
-    }
-
-    if (onVariablesChanged) {
-      await onVariablesChanged();
     }
   };
 
