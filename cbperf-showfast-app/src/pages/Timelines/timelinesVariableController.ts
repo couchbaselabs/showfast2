@@ -18,6 +18,19 @@ export interface TimelineVariableController {
   variables: QueryVariable[];
 }
 
+const explicitDefaultByVariable: Partial<Record<VariableName, string>> = {
+  component: 'kv',
+  category: 'max_ops',
+};
+
+function isAllSelected(value: unknown): boolean {
+  return value === '$__all' || (Array.isArray(value) && value.length > 0 && value[0] === '$__all');
+}
+
+function isEmptySelection(value: unknown): boolean {
+  return value == null || value === '' || (Array.isArray(value) && value.length === 0);
+}
+
 function runVariableUpdate(variable: QueryVariable): Promise<void> {
   return new Promise((resolve) => {
     variable.validateAndUpdate().subscribe({
@@ -34,6 +47,48 @@ export function createTimelineVariableController(): TimelineVariableController {
   }, {} as Record<VariableName, QueryVariable>);
 
   const variables = FILTER_DEFINITIONS.map((definition) => variableMap[definition.name]);
+
+  const applyExplicitDefaults = (): boolean => {
+    let changed = false;
+
+    FILTER_DEFINITIONS.forEach((definition) => {
+      const defaultValue = explicitDefaultByVariable[definition.name];
+      const variable = variableMap[definition.name];
+      const currentValue = variable.state.value;
+
+      if (!defaultValue) {
+        if (isEmptySelection(currentValue)) {
+          variable.changeValueTo('$__all', 'All');
+          changed = true;
+        }
+        return;
+      }
+
+      const options = variable.state.options ?? [];
+      const matchingOption = options.find((option) => option.value === defaultValue);
+      if (!matchingOption) {
+        if (isEmptySelection(currentValue)) {
+          variable.changeValueTo('$__all', 'All');
+          changed = true;
+        }
+        return;
+      }
+
+      const isDefaultSelected =
+        Array.isArray(currentValue) && currentValue.length === 1 && currentValue[0] === defaultValue;
+      const selectedAll = isAllSelected(currentValue);
+      const selectedEmpty = isEmptySelection(currentValue);
+
+      if (isDefaultSelected || (!selectedAll && !selectedEmpty)) {
+        return;
+      }
+
+      variable.changeValueTo([defaultValue], [matchingOption.label]);
+      changed = true;
+    });
+
+    return changed;
+  };
 
   const syncQueries = (): QueryVariable[] => {
     const changed: QueryVariable[] = [];
@@ -52,6 +107,8 @@ export function createTimelineVariableController(): TimelineVariableController {
     if (changed.length > 0) {
       await Promise.all(changed.map((v) => runVariableUpdate(v)));
     }
+
+    applyExplicitDefaults();
   };
 
   variables[0].addActivationHandler(() => {
