@@ -20,10 +20,12 @@ type requiredIndex struct {
 // Couchbase to use an index seek instead of a full collection scan.
 var requiredIndexes = []requiredIndex{
 	{
-		// Covers: WHERE b.hidden = False (primary filter on benchmarks collection)
+		// GetTimelinePanels now drives from metrics → benchmarks via ON KEY b.metric FOR m.
+		// This index lets Couchbase find all benchmarks for a given metric ID efficiently.
+		// Combined with the hidden field, the index also covers the b.hidden = False filter.
 		keyspace: benchmarksKeyspace,
-		name:     "idx_benchmarks_hidden",
-		fields:   "hidden",
+		name:     "idx_benchmarks_metric_hidden",
+		fields:   "metric, hidden",
 	},
 	{
 		// Covers: WHERE r.status = 'completed' (applied after KV join into runs)
@@ -32,14 +34,14 @@ var requiredIndexes = []requiredIndex{
 		fields:   "status",
 	},
 	{
-		// Covers: WHERE m.hidden = False (applied after KV join into metrics)
+		// Covers: WHERE m.hidden = False (primary scan when driving from metrics)
 		keyspace: metricsKeyspace,
 		name:     "idx_metrics_hidden",
 		fields:   "hidden",
 	},
 	{
-		// Covers: filter queries on components / categories / subCategory / cluster / os
-		// used by GenericFiltering and GetTimelinePanels filter conditions.
+		// Covers: WHERE m.hidden = False AND m.component IN [...] AND m.category IN [...]
+		// Used by GetTimelinePanels (driving collection) and GenericFiltering.
 		keyspace: metricsKeyspace,
 		name:     "idx_metrics_hidden_filters",
 		fields:   "hidden, component, category, subCategory",

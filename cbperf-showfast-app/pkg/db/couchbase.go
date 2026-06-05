@@ -10,6 +10,7 @@ import (
 type DataStore struct {
 	cluster     *gocb.Cluster
 	collections map[string]*gocb.Collection
+	cache       *filterCache
 }
 
 const (
@@ -50,6 +51,7 @@ func NewDataStore(connString, username, password string) (*DataStore, error) {
 	ds := &DataStore{
 		cluster:     cluster,
 		collections: make(map[string]*gocb.Collection),
+		cache:       newFilterCache(),
 	}
 
 	bucket := cluster.Bucket(couchbaseBucketName)

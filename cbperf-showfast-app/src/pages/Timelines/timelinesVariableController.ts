@@ -5,7 +5,7 @@
 
 import { QueryVariable } from '@grafana/scenes';
 import { Subject, from, EMPTY } from 'rxjs';
-import { auditTime, concatMap, catchError } from 'rxjs/operators';
+import { auditTime, concatMap, catchError, tap } from 'rxjs/operators';
 import { FILTER_DEFINITIONS, VariableName } from './filterConfig';
 import {
   buildVariableQuery,
@@ -40,7 +40,7 @@ function runVariableUpdate(variable: QueryVariable): Promise<void> {
   });
 }
 
-export function createTimelineVariableController(): TimelineVariableController {
+export function createTimelineVariableController(onReady?: () => void): TimelineVariableController {
   const variableMap = FILTER_DEFINITIONS.reduce((acc, definition) => {
     acc[definition.name] = createFilterVariable(definition.name, definition.label, definition.endpoint);
     return acc;
@@ -113,16 +113,23 @@ export function createTimelineVariableController(): TimelineVariableController {
 
   variables[0].addActivationHandler(() => {
     const refreshTrigger$ = new Subject<void>();
+    let initialLoadDone = false;
 
     // Serialize refreshes and coalesce synchronous bursts from variable state updates.
+    // After the first pipeline completes, fire onReady so the caller can load panels
+    // with the correct variable values already resolved from the URL.
     const refreshSub = refreshTrigger$
       .pipe(
         auditTime(0),
         concatMap(() =>
           from(runRefreshPipeline()).pipe(
-            catchError(() => {
-              return EMPTY;
-            })
+            tap(() => {
+              if (!initialLoadDone) {
+                initialLoadDone = true;
+                onReady?.();
+              }
+            }),
+            catchError(() => EMPTY)
           )
         )
       )

@@ -39,6 +39,7 @@ func SetupRouter(ds *db.DataStore) *gin.Engine {
 		filters.GET("/os", h.GetOsV2)
 		filters.GET("/pipeline-groups", h.GetPipelineGroupsV2)
 		filters.GET("/server-major-minors", h.GetServerMajorMinorsV2)
+		filters.POST("/reload", h.ReloadFiltersV2)
 	}
 
 	summary := router.Group("/summary")

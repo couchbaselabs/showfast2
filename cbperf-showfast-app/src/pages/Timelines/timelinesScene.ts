@@ -86,7 +86,11 @@ export function timelinesScene() {
     }
   };
 
-  const controller = createTimelineVariableController();
+  // Pass refreshPanels as onReady so panels load once after variables have resolved
+  // their values from the URL — prevents querying with $__all on first render.
+  const controller = createTimelineVariableController(() => {
+    void refreshPanels();
+  });
 
   const applyFiltersControl = new SceneReactObject({
     reactNode: React.createElement(Button, {
@@ -99,8 +103,6 @@ export function timelinesScene() {
       children: 'Apply',
     }),
   });
-
-  void refreshPanels();
 
   return new EmbeddedScene({
     $variables: new SceneVariableSet({ variables: controller.variables }),

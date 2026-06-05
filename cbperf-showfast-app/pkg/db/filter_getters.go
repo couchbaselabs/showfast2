@@ -2,6 +2,9 @@ package db
 
 import (
 	"context"
+	"sync"
+
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
 
 const baseQuery = "FROM (SELECT b.`value`, b.`build`, b.pipelineGroup, b.serverMajorMinor, m.`title`, m.component, m.category, m.subCategory, CASE WHEN c.os.distro IS NOT MISSING AND c.os.version IS NOT MISSING THEN c.os.distro || '-' || c.os.version WHEN c.os.distro IS NOT MISSING THEN c.os.distro ELSE TO_STRING(c.os) END AS os, c.cpu, c.name FROM " + benchmarksKeyspace + " b JOIN " + runsKeyspace + " r ON KEYS b.runId JOIN " + metricsKeyspace + " m ON KEYS b.metric JOIN " + clustersKeyspace + " c ON KEYS r.clusterId WHERE b.hidden = false AND m.hidden = false AND r.status = 'completed') as subquery "
@@ -67,6 +70,11 @@ func (ds *DataStore) GenericFiltering(filter string, opts FilterOptions, c conte
 		return nil, err
 	}
 
+	key := filterCacheKey(column, opts)
+	if cached, ok := ds.cache.get(key); ok {
+		return cached, nil
+	}
+
 	query := "SELECT DISTINCT RAW subquery." + column + " " + baseQuery + "WHERE subquery." + column + "!= \"\""
 	params := make(map[string]interface{})
 	query, params = addGenericFilterConditions(query, params, opts, map[string]string{
@@ -79,7 +87,45 @@ func (ds *DataStore) GenericFiltering(filter string, opts FilterOptions, c conte
 		"serverMajorMinor": "subquery.serverMajorMinor",
 	}, map[string]bool{column: true})
 	query += ` ORDER BY subquery.` + column
-	return queryRows[string](ds.cluster, query, params, column, c)
+
+	result, err := queryRows[string](ds.cluster, query, params, column, c)
+	if err != nil {
+		return nil, err
+	}
+
+	ds.cache.set(key, result)
+	return result, nil
+}
+
+// WarmFilterCache pre-populates the cache with all 7 unfiltered filter dimensions.
+// Subsequent cross-filter combinations are cached lazily on first access.
+// Runs all queries concurrently since they are independent.
+func (ds *DataStore) WarmFilterCache(ctx context.Context) {
+	fns := []func(FilterOptions, context.Context) ([]string, error){
+		ds.GetComponents,
+		ds.GetCategories,
+		ds.GetSubcategories,
+		ds.GetOs,
+		ds.GetClusters,
+		ds.GetPipelineGroups,
+		ds.GetServerMajorMinors,
+	}
+	var wg sync.WaitGroup
+	for _, fn := range fns {
+		wg.Add(1)
+		go func(f func(FilterOptions, context.Context) ([]string, error)) {
+			defer wg.Done()
+			_, _ = f(FilterOptions{}, ctx)
+		}(fn)
+	}
+	wg.Wait()
+	log.DefaultLogger.Info("filter cache warmed")
+}
+
+// ReloadFilterCache clears the cache and re-warms it in the background.
+func (ds *DataStore) ReloadFilterCache() {
+	ds.cache.clear()
+	go ds.WarmFilterCache(context.Background())
 }
 
 func (ds *DataStore) GetComponents(opts FilterOptions, c context.Context) ([]string, error) {

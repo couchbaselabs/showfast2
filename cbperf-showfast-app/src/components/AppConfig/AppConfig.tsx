@@ -1,153 +1,78 @@
-import React, { useState, ChangeEvent } from 'react';
-import { Button, Field, Input, useStyles2, FieldSet, SecretInput } from '@grafana/ui';
-import { PluginConfigPageProps, AppPluginMeta, PluginMeta, GrafanaTheme2 } from '@grafana/data';
-import { getBackendSrv, locationService } from '@grafana/runtime';
+import React, { useState } from 'react';
+import { Button, FieldSet, Alert, useStyles2 } from '@grafana/ui';
+import { PluginConfigPageProps, AppPluginMeta, GrafanaTheme2 } from '@grafana/data';
+import { getBackendSrv } from '@grafana/runtime';
 import { css } from '@emotion/css';
-import { testIds } from '../testIds';
 import { lastValueFrom } from 'rxjs';
 
-type JsonData = {
-  apiUrl?: string;
-  isApiKeySet?: boolean;
-};
+export interface AppConfigProps extends PluginConfigPageProps<AppPluginMeta> {}
 
-type State = {
-  // The URL to reach our custom API.
-  apiUrl: string;
-  // Tells us if the API key secret is set.
-  // Set to `true` ONLY if it has already been set and haven't been changed.
-  // (We unfortunately need an auxiliray variable for this, as `secureJsonData` is never exposed to the browser after it is set)
-  isApiKeySet: boolean;
-  // An secret key for our custom API.
-  apiKey: string;
-};
-
-export interface AppConfigProps extends PluginConfigPageProps<AppPluginMeta<JsonData>> {}
+type ReloadState = 'idle' | 'loading' | 'success' | 'error';
 
 const AppConfig = ({ plugin }: AppConfigProps) => {
   const s = useStyles2(getStyles);
-  const { enabled, pinned, jsonData } = plugin.meta;
-  const [state, setState] = useState<State>({
-    apiUrl: jsonData?.apiUrl || '',
-    apiKey: '',
-    isApiKeySet: Boolean(jsonData?.isApiKeySet),
-  });
+  const [reloadState, setReloadState] = useState<ReloadState>('idle');
 
-  const isSubmitDisabled = Boolean(!state.apiUrl || (!state.isApiKeySet && !state.apiKey));
-
-  const onResetApiKey = () =>
-    setState({
-      ...state,
-      apiKey: '',
-      isApiKeySet: false,
-    });
-
-  const onChangeApiKey = (event: ChangeEvent<HTMLInputElement>) => {
-    setState({
-      ...state,
-      apiKey: event.target.value.trim(),
-    });
-  };
-
-  const onChangeApiUrl = (event: ChangeEvent<HTMLInputElement>) => {
-    setState({
-      ...state,
-      apiUrl: event.target.value.trim(),
-    });
-  };
-
-  const onSubmit = () => {
-    updatePluginAndReload(plugin.meta.id, {
-      enabled,
-      pinned,
-      jsonData: {
-        apiUrl: state.apiUrl,
-        isApiKeySet: true,
-      },
-      // This cannot be queried later by the frontend.
-      // We don't want to override it in case it was set previously and left untouched now.
-      secureJsonData: state.isApiKeySet
-        ? undefined
-        : {
-            apiKey: state.apiKey,
-          },
-    });
+  const onReloadFilters = async () => {
+    setReloadState('loading');
+    try {
+      await lastValueFrom(
+        getBackendSrv().fetch({
+          url: `/api/plugins/${plugin.meta.id}/resources/filters/reload`,
+          method: 'POST',
+        })
+      );
+      setReloadState('success');
+    } catch {
+      setReloadState('error');
+    }
   };
 
   return (
-    <form onSubmit={onSubmit}>
-      <FieldSet label="API Settings" className={s.marginTopXl}>
-        {/* API Key */}
-        <Field label="API Key" description="A secret key for authenticating to our custom API">
-          <SecretInput
-            width={60}
-            data-testid={testIds.appConfig.apiKey}
-            id="api-key"
-            value={state?.apiKey}
-            isConfigured={state.isApiKeySet}
-            placeholder={'Your secret API key'}
-            onChange={onChangeApiKey}
-            onReset={onResetApiKey}
-          />
-        </Field>
+    <div className={s.container}>
+      <FieldSet label="Filter Cache">
+        <p className={s.description}>
+          Filter options (components, categories, clusters, etc.) are cached in memory at startup for
+          fast loading. If new data has been added directly to Couchbase outside of the API, reload
+          the cache to pick up the changes.
+        </p>
 
-        {/* API Url */}
-        <Field label="API Url" description="" className={s.marginTop}>
-          <Input
-            width={60}
-            id="api-url"
-            data-testid={testIds.appConfig.apiUrl}
-            label={`API Url`}
-            value={state?.apiUrl}
-            placeholder={`E.g.: http://mywebsite.com/api/v1`}
-            onChange={onChangeApiUrl}
-          />
-        </Field>
+        {reloadState === 'success' && (
+          <Alert title="Cache reload triggered" severity="success" className={s.alert}>
+            The filter cache has been cleared and is being rebuilt in the background. Filter dropdowns
+            will reflect updated values within a few seconds.
+          </Alert>
+        )}
+        {reloadState === 'error' && (
+          <Alert title="Reload failed" severity="error" className={s.alert}>
+            Could not reach the plugin backend. Check that the plugin is running and healthy.
+          </Alert>
+        )}
 
-        <div className={s.marginTop}>
-          <Button type="submit" data-testid={testIds.appConfig.submit} disabled={isSubmitDisabled}>
-            Save API settings
-          </Button>
-        </div>
+        <Button
+          variant="secondary"
+          icon={reloadState === 'loading' ? 'fa fa-spinner' : 'sync'}
+          disabled={reloadState === 'loading'}
+          onClick={onReloadFilters}
+        >
+          {reloadState === 'loading' ? 'Reloading…' : 'Reload Filter Cache'}
+        </Button>
       </FieldSet>
-    </form>
+    </div>
   );
 };
 
 export default AppConfig;
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  colorWeak: css`
-    color: ${theme.colors.text.secondary};
-  `,
-  marginTop: css`
-    margin-top: ${theme.spacing(3)};
-  `,
-  marginTopXl: css`
+  container: css`
     margin-top: ${theme.spacing(6)};
   `,
+  description: css`
+    color: ${theme.colors.text.secondary};
+    margin-bottom: ${theme.spacing(2)};
+  `,
+  alert: css`
+    margin-bottom: ${theme.spacing(2)};
+  `,
 });
-
-const updatePluginAndReload = async (pluginId: string, data: Partial<PluginMeta<JsonData>>) => {
-  try {
-    await updatePlugin(pluginId, data);
-
-    // Reloading the page as the changes made here wouldn't be propagated to the actual plugin otherwise.
-    // This is not ideal, however unfortunately currently there is no supported way for updating the plugin state.
-    locationService.reload();
-  } catch (e) {
-    console.error('Error while updating the plugin', e);
-  }
-};
-
-const updatePlugin = async (pluginId: string, data: Partial<PluginMeta>) => {
-  const response = getBackendSrv().fetch({
-    url: `/api/plugins/${pluginId}/settings`,
-    method: 'POST',
-    data,
-  });
-
-  const dataResponse = await lastValueFrom(response);
-
-  return dataResponse.data;
-};

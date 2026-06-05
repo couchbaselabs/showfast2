@@ -78,12 +78,18 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 		Snapshots []string `json:"snapshots"`
 	}
 
+	// Drive from metrics (small, filterable by component/category via idx_metrics_hidden_filters),
+	// then find benchmarks via ON KEY b.metric FOR m (uses idx_benchmarks_metric_hidden).
+	// This is much faster than the reverse: scanning all benchmarks then filtering on joined metric fields.
 	query := "SELECT m.id AS metricId, m.`title` AS title, m.component AS component, m.category AS category, "
 	query += "m.subCategory AS subCategory, r.clusterId AS `cluster`, m.tags AS tags, "
 	query += "{\"name\": c.name, \"os\": CASE WHEN c.os.distro IS NOT MISSING AND c.os.version IS NOT MISSING THEN c.os.distro || '-' || c.os.version WHEN c.os.distro IS NOT MISSING THEN c.os.distro ELSE TO_STRING(c.os) END, \"cpu\": c.cpu, \"disk\": c.disk, \"memory\": c.memory} AS clusterInfo, "
-	query += "b.`build` AS `build`, b.`value` AS `value`, r.`buildURL` AS `buildUrl` , b.`snapshots` as snapshots "
-	query += "FROM " + benchmarksKeyspace + " b JOIN " + runsKeyspace + " r ON KEYS b.runId JOIN " + metricsKeyspace + " m ON KEYS b.metric JOIN " + clustersKeyspace + " c ON KEYS r.clusterId "
-	query += "WHERE b.hidden = False AND m.hidden = False AND r.status = 'completed'"
+	query += "b.`build` AS `build`, b.`value` AS `value`, r.`buildURL` AS `buildUrl`, b.`snapshots` AS snapshots "
+	query += "FROM " + metricsKeyspace + " m "
+	query += "JOIN " + benchmarksKeyspace + " b ON KEY b.metric FOR m "
+	query += "JOIN " + runsKeyspace + " r ON KEYS b.runId "
+	query += "JOIN " + clustersKeyspace + " c ON KEYS r.clusterId "
+	query += "WHERE m.hidden = False AND b.hidden = False AND r.status = 'completed'"
 	params := make(map[string]interface{})
 	query, params = addGenericFilterConditions(query, params, *filters, map[string]string{
 		"component":        "m.component",
