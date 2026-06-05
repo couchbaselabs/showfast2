@@ -45,6 +45,7 @@ func NewApp(_ context.Context, settings backend.AppInstanceSettings) (instancemg
 	if err != nil {
 		return nil, err
 	}
+	app.DataStore.EnsureIndexes()
 
 	// Use a httpadapter (provided by the SDK) for resource calls. This allows us
 	// to use a *http.ServeMux for resource calls, so we can map multiple routes

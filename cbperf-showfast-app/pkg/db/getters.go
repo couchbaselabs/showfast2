@@ -4,8 +4,10 @@ import (
 	"context"
 	"regexp"
 	"sort"
+	"time"
 
 	"github.com/cbperf/showfast/pkg/models"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
 
 var validTagKey = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
@@ -100,11 +102,15 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 	}
 
 	query += " ORDER BY m.component, m.category, m.subCategory, m.title ASC"
+
+	queryStart := time.Now()
 	results, err := queryRows[timelinePanelRow](ds.cluster, query, params, "timeline panel", c)
+	queryMs := time.Since(queryStart).Milliseconds()
 	if err != nil {
 		return nil, err
 	}
 
+	aggStart := time.Now()
 	panelMap := make(map[string]*models.TimelinePanel)
 	panelOrder := make([]string, 0)
 	for _, row := range results {
@@ -123,13 +129,24 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 		})
 	}
 
+	totalPoints := 0
 	panels := make([]models.TimelinePanel, 0, len(panelOrder))
 	for _, metricID := range panelOrder {
 		sort.SliceStable(panelMap[metricID].BenchmarksValues, func(i, j int) bool {
 			return compareSemanticBuild(panelMap[metricID].BenchmarksValues[i].Build, panelMap[metricID].BenchmarksValues[j].Build) > 0
 		})
+		totalPoints += len(panelMap[metricID].BenchmarksValues)
 		panels = append(panels, *panelMap[metricID])
 	}
+	aggMs := time.Since(aggStart).Milliseconds()
+
+	log.DefaultLogger.Info("GetTimelinePanels",
+		"rows", len(results),
+		"panels", len(panels),
+		"totalPoints", totalPoints,
+		"queryMs", queryMs,
+		"aggMs", aggMs,
+	)
 
 	return &panels, nil
 }
