@@ -132,10 +132,25 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 	totalPoints := 0
 	panels := make([]models.TimelinePanel, 0, len(panelOrder))
 	for _, metricID := range panelOrder {
-		sort.SliceStable(panelMap[metricID].BenchmarksValues, func(i, j int) bool {
-			return compareSemanticBuild(panelMap[metricID].BenchmarksValues[i].Build, panelMap[metricID].BenchmarksValues[j].Build) > 0
+		pts := panelMap[metricID].BenchmarksValues
+		keys := make([][4]int, len(pts))
+		for i, pt := range pts {
+			keys[i], _ = parseSemanticBuild(pt.Build)
+		}
+		sort.SliceStable(pts, func(i, j int) bool {
+			ki, kj := keys[i], keys[j]
+			if ki[0] != kj[0] {
+				return ki[0] > kj[0]
+			}
+			if ki[1] != kj[1] {
+				return ki[1] > kj[1]
+			}
+			if ki[2] != kj[2] {
+				return ki[2] > kj[2]
+			}
+			return ki[3] > kj[3]
 		})
-		totalPoints += len(panelMap[metricID].BenchmarksValues)
+		totalPoints += len(pts)
 		panels = append(panels, *panelMap[metricID])
 	}
 	aggMs := time.Since(aggStart).Milliseconds()
