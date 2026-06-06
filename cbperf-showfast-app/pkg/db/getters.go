@@ -70,6 +70,13 @@ func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]inter
 }
 
 func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context) (*[]models.TimelinePanel, error) {
+	if isPureViewQuery(filters) {
+		key := panelCacheKey(filters.Components[0], filters.Categories[0])
+		if cached, ok := ds.panels.get(key); ok {
+			return &cached, nil
+		}
+	}
+
 	type timelinePanelRow struct {
 		models.TimelinePanel
 		Build     string   `json:"build"`
@@ -139,27 +146,28 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 	panels := make([]models.TimelinePanel, 0, len(panelOrder))
 	for _, metricID := range panelOrder {
 		pts := panelMap[metricID].BenchmarksValues
-		keys := make([][4]int, len(pts))
-		for i, pt := range pts {
-			keys[i], _ = parseSemanticBuild(pt.Build)
-		}
 		sort.SliceStable(pts, func(i, j int) bool {
-			ki, kj := keys[i], keys[j]
+			ki, _ := parseSemanticBuild(pts[i].Build)
+			kj, _ := parseSemanticBuild(pts[j].Build)
 			if ki[0] != kj[0] {
-				return ki[0] > kj[0]
+				return ki[0] < kj[0]
 			}
 			if ki[1] != kj[1] {
-				return ki[1] > kj[1]
+				return ki[1] < kj[1]
 			}
 			if ki[2] != kj[2] {
-				return ki[2] > kj[2]
+				return ki[2] < kj[2]
 			}
-			return ki[3] > kj[3]
+			return ki[3] < kj[3]
 		})
 		totalPoints += len(pts)
 		panels = append(panels, *panelMap[metricID])
 	}
 	aggMs := time.Since(aggStart).Milliseconds()
+
+	if isPureViewQuery(filters) {
+		ds.panels.set(panelCacheKey(filters.Components[0], filters.Categories[0]), panels)
+	}
 
 	log.DefaultLogger.Info("GetTimelinePanels",
 		"rows", len(results),

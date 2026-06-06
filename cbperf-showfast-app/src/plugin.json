@@ -37,6 +37,13 @@
     },
     {
       "type": "page",
+      "name": "Explore",
+      "path": "/a/%PLUGIN_ID%/timelines/explore",
+      "addToNav": true,
+      "defaultNav": false
+    },
+    {
+      "type": "page",
       "name": "Search",
       "path": "/a/%PLUGIN_ID%/search",
       "addToNav": true,

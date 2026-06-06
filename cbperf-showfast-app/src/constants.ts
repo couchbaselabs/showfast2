@@ -6,6 +6,7 @@ export const API_BASE_URL = `/api/plugins/${pluginJson.id}/resources`;
 export const ROUTES = {
   Home: '',
   Timelines: 'timelines',
+  TimelinesExplore: 'timelines/explore',
   Search: 'search',
 }
 

@@ -9,6 +9,9 @@ func SetupRouter(ds *db.DataStore) *gin.Engine {
 	router := gin.Default()
 	h := NewHandler(ds)
 
+	router.GET("/menu", h.GetMenu)
+	router.POST("/menu/reload", h.ReloadMenu)
+
 	router.GET("/builds", h.GetBuildsV2)
 	router.GET("/metrics", h.GetMetricsV2)
 	router.GET("/benchmarks", h.GetBenchmarksV2)

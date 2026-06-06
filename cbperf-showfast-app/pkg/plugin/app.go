@@ -8,6 +8,7 @@ import (
 	"github.com/cbperf/showfast/pkg/db"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/resource/httpadapter"
 )
 
@@ -46,7 +47,11 @@ func NewApp(_ context.Context, settings backend.AppInstanceSettings) (instancemg
 		return nil, err
 	}
 	app.DataStore.EnsureIndexes()
+	if err := app.DataStore.LoadMenuConfig(); err != nil {
+		log.DefaultLogger.Warn("menu config unavailable", "err", err)
+	}
 	go app.DataStore.WarmFilterCache(context.Background())
+	go app.DataStore.WarmPanelsFromMenu()
 
 	// Use a httpadapter (provided by the SDK) for resource calls. This allows us
 	// to use a *http.ServeMux for resource calls, so we can map multiple routes
