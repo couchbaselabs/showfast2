@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GrafanaTheme2 } from '@grafana/data';
-import { Button, Spinner, Switch, useStyles2 } from '@grafana/ui';
+import { Button, Input, Spinner, Switch, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
 import { FILTER_DEFINITIONS } from '../Timelines/filterConfig';
 import {
@@ -196,6 +196,10 @@ function getStyles(theme: GrafanaTheme2) {
       fontSize: 12,
       color: theme.colors.text.secondary,
     }),
+    searchWrapper: css({
+      padding: theme.spacing(1, 2, 1.5),
+      borderBottom: `1px solid ${theme.colors.border.weak}`,
+    }),
   };
 }
 
@@ -288,6 +292,9 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
     const next: FilterValues = {};
     selectedRef.current = next;
     setSelected(next);
+    const nextOpts = { ...exploreOptionsRef.current, titleSearch: '' };
+    exploreOptionsRef.current = nextOpts;
+    setExploreOptions(nextOpts);
     doRefetch(next);
   }, [doRefetch]);
 
@@ -323,6 +330,23 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
         <Button variant="primary" size="sm" icon="search" fullWidth onClick={() => onApply(selected, exploreOptionsRef.current)}>
           Apply
         </Button>
+      </div>
+
+      <div className={styles.searchWrapper}>
+        <Input
+          placeholder="Search metrics…"
+          value={exploreOptions.titleSearch}
+          onChange={(e) => {
+            const next = { ...exploreOptionsRef.current, titleSearch: e.currentTarget.value };
+            exploreOptionsRef.current = next;
+            setExploreOptions(next);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              onApply(selectedRef.current, exploreOptionsRef.current);
+            }
+          }}
+        />
       </div>
 
       <div className={styles.optionsSection}>

@@ -50,6 +50,7 @@ type FilterOptions struct {
 	Tags                 map[string][]string
 	ShowHiddenMetrics    bool
 	ShowHiddenBenchmarks bool
+	TitleSearch          string
 }
 
 type GenericFilterSpec struct {

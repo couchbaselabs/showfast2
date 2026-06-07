@@ -104,8 +104,14 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 	if !filters.ShowHiddenBenchmarks {
 		whereClauses = append(whereClauses, "b.hidden = False")
 	}
+	if filters.TitleSearch != "" {
+		whereClauses = append(whereClauses, "CONTAINS(LOWER(m.`title`), $titleSearch)")
+	}
 	query += "WHERE " + strings.Join(whereClauses, " AND ")
 	params := make(map[string]interface{})
+	if filters.TitleSearch != "" {
+		params["titleSearch"] = strings.ToLower(filters.TitleSearch)
+	}
 	query, params = addGenericFilterConditions(query, params, *filters, map[string]string{
 		"component":        "m.component",
 		"category":         "m.category",

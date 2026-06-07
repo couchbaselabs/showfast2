@@ -7,11 +7,13 @@ export type FilterValues = Partial<Record<string, string[]>>;
 export interface ExploreOptions {
   showHiddenMetrics: boolean;
   showHiddenBenchmarks: boolean;
+  titleSearch: string;
 }
 
 export const DEFAULT_EXPLORE_OPTIONS: ExploreOptions = {
   showHiddenMetrics: false,
   showHiddenBenchmarks: false,
+  titleSearch: '',
 };
 
 export interface BulkFilters {

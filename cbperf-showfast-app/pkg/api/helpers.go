@@ -105,5 +105,6 @@ func parseFilterOptions(c *gin.Context) db.FilterOptions {
 		Tags:                 extractTagsFromQuery(c),
 		ShowHiddenMetrics:    c.Query("showHiddenMetrics") == "true",
 		ShowHiddenBenchmarks: c.Query("showHiddenBenchmarks") == "true",
+		TitleSearch:          strings.TrimSpace(c.Query("q")),
 	}
 }

@@ -51,5 +51,6 @@ func isPureViewQuery(filters *FilterOptions) bool {
 		len(filters.OS) == 0 &&
 		len(filters.PipelineGroups) == 0 &&
 		len(filters.ServerMajorMinors) == 0 &&
-		len(filters.Tags) == 0
+		len(filters.Tags) == 0 &&
+		filters.TitleSearch == ""
 }

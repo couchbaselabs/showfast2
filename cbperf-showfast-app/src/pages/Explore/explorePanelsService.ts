@@ -28,6 +28,9 @@ export async function fetchTimelineBarChartPanelsPage(
   params.set('limit', String(pageSize));
   params.set('offset', String(page * pageSize));
   applyExploreOptions(params, options);
+  if (options.titleSearch) {
+    params.set('q', options.titleSearch);
+  }
   const url = `${API_BASE_URL}/timelines/panels?${params.toString()}`;
   try {
     return await getBackendSrv().get<PaginatedPanelsResponse>(url);
