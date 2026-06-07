@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SelectableValue } from '@grafana/data';
 import { locationService } from '@grafana/runtime';
 import { Input, Select, Spinner, Tab, TabsBar, useTheme2 } from '@grafana/ui';
-import { ComponentConfig, VariantsConfig, dbComponentIDs } from './menuApiTypes';
+import { ComponentConfig, VariantsConfig, dbComponentIDsForVariant } from './menuApiTypes';
 import { fetchComponentConfig, fetchPanelsForView, fetchVariantsConfig } from './menuService';
 import { TimelinePanel } from './timelinesApiTypes';
 
@@ -10,8 +10,8 @@ import { TimelinePanel } from './timelinesApiTypes';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function cacheKey(componentId: string, category: string): string {
-  return `${componentId}:${category}`;
+function cacheKey(variantId: string, componentId: string, category: string): string {
+  return `${variantId}:${componentId}:${category}`;
 }
 
 function firstVisibleCategory(cfg: ComponentConfig, variantId: string): string {
@@ -200,18 +200,18 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
     if (!componentKey || !categoryId || !componentConfig) {
       return;
     }
-    const key = cacheKey(componentKey, categoryId);
+    const key = cacheKey(variantKey, componentKey, categoryId);
     if (panelCacheRef.current[key] !== undefined) {
       return;
     }
     onLoadingChange(true);
     setPanelsLoading(true);
-    fetchPanelsForView(dbComponentIDs(componentConfig), categoryId)
+    fetchPanelsForView(dbComponentIDsForVariant(componentConfig, variantKey), categoryId)
       .then((panels) => {
         setPanelCache((prev) => ({ ...prev, [key]: panels }));
       })
       .catch((err: unknown) => {
-        console.error('panel fetch failed', componentKey, categoryId, err);
+        console.error('panel fetch failed', variantKey, componentKey, categoryId, err);
         setPanelCache((prev) => ({ ...prev, [key]: [] }));
       })
       .finally(() => {
@@ -219,12 +219,12 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
         onLoadingChange(false);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [componentKey, categoryId]);
+  }, [variantKey, componentKey, categoryId]);
 
   // -------------------------------------------------------------------------
   // Derive visible panels (client-side filtering)
   // -------------------------------------------------------------------------
-  const allPanels = panelCache[cacheKey(componentKey, categoryId)] ?? null;
+  const allPanels = panelCache[cacheKey(variantKey, componentKey, categoryId)] ?? null;
 
   const visiblePanels = useMemo(() => {
     if (!allPanels) { return null; }
