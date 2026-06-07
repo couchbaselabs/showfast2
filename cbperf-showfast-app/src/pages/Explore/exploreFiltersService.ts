@@ -35,17 +35,13 @@ function applyExploreOptions(params: URLSearchParams, options: ExploreOptions): 
   }
 }
 
-export async function fetchBulkFilters(
-  selected: FilterValues = {},
-  options: ExploreOptions = DEFAULT_EXPLORE_OPTIONS
-): Promise<BulkFilters> {
+export async function fetchBulkFilters(selected: FilterValues = {}): Promise<BulkFilters> {
   const params = new URLSearchParams();
   for (const def of FILTER_DEFINITIONS) {
     for (const v of selected[def.name] ?? []) {
       params.append(def.queryKey, v);
     }
   }
-  applyExploreOptions(params, options);
   const qs = params.toString();
   return getBackendSrv().get<BulkFilters>(`${API_BASE_URL}/filters/bulk${qs ? `?${qs}` : ''}`);
 }

@@ -17,6 +17,7 @@ func SetupRouter(ds *db.DataStore) *gin.Engine {
 	router.GET("/metrics", h.GetMetricsV2)
 	router.GET("/benchmarks", h.GetBenchmarksV2)
 	router.GET("/runs", h.GetRunsV2)
+	router.GET("/runs/detail", h.GetRunDetailV2)
 	router.GET("/timeline/:metricId", h.GetTimelineV2)
 	router.GET("/timeline", h.GetTimelinePanelsV2)
 	router.GET("/timelines/panels", h.GetTimelinePanelsV2)

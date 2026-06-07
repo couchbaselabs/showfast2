@@ -6,6 +6,7 @@ import { explorePage } from '../../pages/Explore/explorePage';
 import { homePage } from '../../pages/Home/homePage';
 import { searchPage } from '../../pages/Search/searchPage';
 import { timelinesPage } from '../../pages/Timelines/timelinesPage';
+import { BenchmarkDetailController } from './BenchmarkDetailController';
 
 function getSceneApp() {
   return new SceneApp({
@@ -27,8 +28,10 @@ function AppWithScenes() {
 function App(props: AppRootProps) {
   return (
     <PluginPropsContext.Provider value={props}>
-      <AppWithScenes />
-    </PluginPropsContext.Provider> 
+      <BenchmarkDetailController>
+        <AppWithScenes />
+      </BenchmarkDetailController>
+    </PluginPropsContext.Provider>
   );
 }
 

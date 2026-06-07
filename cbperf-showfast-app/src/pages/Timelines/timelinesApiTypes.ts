@@ -8,6 +8,7 @@ export interface TimelinePoint {
   value: number;
   buildUrl?: string;
   snapshots?: string[];
+  runId?: string;
 }
 
 export interface TimelineClusterInfo {

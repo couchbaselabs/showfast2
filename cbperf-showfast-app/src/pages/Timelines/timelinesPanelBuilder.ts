@@ -56,6 +56,11 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
               url: '${__data.fields.buildUrl}',
               targetBlank: true,
             },
+            {
+              title: 'View details',
+              url: '${__url.path}?${__url.params}&detailRunId=${__data.fields.runId}&detailMetricId=${__data.fields.metricId}',
+              targetBlank: false,
+            },
             ...snapshotLinks,
           ],
         },
@@ -66,6 +71,18 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
         type: FieldType.string,
         config: {},
         values: points.map((p) => p.buildUrl ?? ''),
+      },
+      {
+        name: 'runId',
+        type: FieldType.string,
+        config: {},
+        values: points.map((p) => p.runId ?? ''),
+      },
+      {
+        name: 'metricId',
+        type: FieldType.string,
+        config: {},
+        values: points.map(() => panel.metricId),
       },
       {
         name: 'snapshots',
@@ -94,6 +111,16 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
     .setData(new SceneDataNode({ data: panelData }))
     .setOverrides((b) => {
       b.matchFieldsWithName('buildUrl').overrideCustomFieldConfig('hideFrom', {
+        tooltip: true,
+        viz: true,
+        legend: true,
+      });
+      b.matchFieldsWithName('runId').overrideCustomFieldConfig('hideFrom', {
+        tooltip: true,
+        viz: true,
+        legend: true,
+      });
+      b.matchFieldsWithName('metricId').overrideCustomFieldConfig('hideFrom', {
         tooltip: true,
         viz: true,
         legend: true,

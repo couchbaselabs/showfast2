@@ -116,6 +116,29 @@ func (h *Handler) GetFiltersV2(c *gin.Context) {
 	})
 }
 
+func (h *Handler) GetRunDetailV2(c *gin.Context) {
+	runID, ok := requireQueryParam(c, "runId")
+	if !ok {
+		return
+	}
+	metricID, ok := requireQueryParam(c, "metricId")
+	if !ok {
+		return
+	}
+
+	ctx := extractContextFromGin(c)
+	detail, err := h.ds.GetRunDetail(runID, metricID, ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if detail == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	c.JSON(http.StatusOK, detail)
+}
+
 func (h *Handler) GetClusterInfoV2(c *gin.Context) {
 	clusterID, ok := requirePathParam(c, "clusterId")
 	if !ok {
