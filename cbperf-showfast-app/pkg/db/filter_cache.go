@@ -52,8 +52,17 @@ func filterCacheKey(column string, opts FilterOptions) string {
 	}
 	sort.Strings(tagParts)
 
+	hiddenFlags := ""
+	if opts.ShowHiddenMetrics {
+		hiddenFlags += "hm"
+	}
+	if opts.ShowHiddenBenchmarks {
+		hiddenFlags += "hb"
+	}
+
 	return strings.Join([]string{
 		column,
+		hiddenFlags,
 		sortedJoin(opts.Components),
 		sortedJoin(opts.Categories),
 		sortedJoin(opts.Subcategories),

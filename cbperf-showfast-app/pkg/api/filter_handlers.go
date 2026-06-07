@@ -29,6 +29,13 @@ func (h *Handler) GetServerMajorMinorsV2(c *gin.Context) {
 	h.executeFilterRequest(c, h.ds.GetServerMajorMinors)
 }
 
+func (h *Handler) GetFiltersBulkV2(c *gin.Context) {
+	opts := parseFilterOptions(c)
+	executeAndRespond(c, http.StatusOK, func(ctx context.Context) (interface{}, error) {
+		return h.ds.GetFiltersBulk(opts, ctx)
+	})
+}
+
 // ReloadFiltersV2 clears the filter cache and re-warms it in the background.
 // Returns immediately — the warm happens asynchronously.
 func (h *Handler) ReloadFiltersV2(c *gin.Context) {

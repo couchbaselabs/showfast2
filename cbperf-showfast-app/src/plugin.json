@@ -37,8 +37,8 @@
     },
     {
       "type": "page",
-      "name": "Explore",
-      "path": "/a/%PLUGIN_ID%/timelines/explore",
+      "name": "Metrics Explore",
+      "path": "/a/%PLUGIN_ID%/metrics-explore",
       "addToNav": true,
       "defaultNav": false
     },

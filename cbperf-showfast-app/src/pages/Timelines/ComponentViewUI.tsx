@@ -435,7 +435,7 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
 
         <Input
           prefix={<span style={{ color: c.text.disabled }}>⌕</span>}
-          placeholder="Search panels…"
+          placeholder="Search metrics…"
           value={searchText}
           onChange={(e) => setSearchText(e.currentTarget.value)}
           width={22}
@@ -446,7 +446,7 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
         ) : (
           visiblePanels !== null && (
             <span style={{ fontSize: 12, color: c.text.disabled, whiteSpace: 'nowrap' }}>
-              {visiblePanels.length} panel{visiblePanels.length !== 1 ? 's' : ''}
+                {visiblePanels.length} metric{visiblePanels.length !== 1 ? 's' : ''}
             </span>
           )
         )}

@@ -70,6 +70,13 @@ type RunDoc struct {
 	Versions      map[string]string `json:"versions,omitempty"`
 }
 
+type PaginatedTimelinesResponse struct {
+	Panels []TimelinePanel `json:"panels"`
+	Total  int             `json:"total"`
+	Limit  int             `json:"limit"`
+	Offset int             `json:"offset"`
+}
+
 type TimelinePanel struct {
 	MetricID         string               `json:"metricId"`
 	Title            string               `json:"title"`

@@ -2,22 +2,54 @@ package db
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
 
-const baseQuery = "FROM (SELECT b.`value`, b.`build`, b.pipelineGroup, b.serverMajorMinor, m.`title`, m.component, m.category, m.subCategory, CASE WHEN c.os.distro IS NOT MISSING AND c.os.version IS NOT MISSING THEN c.os.distro || '-' || c.os.version WHEN c.os.distro IS NOT MISSING THEN c.os.distro ELSE TO_STRING(c.os) END AS os, c.cpu, c.name FROM " + benchmarksKeyspace + " b JOIN " + runsKeyspace + " r ON KEYS b.runId JOIN " + metricsKeyspace + " m ON KEYS b.metric JOIN " + clustersKeyspace + " c ON KEYS r.clusterId WHERE b.hidden = false AND m.hidden = false AND r.status = 'completed') as subquery "
+// filterQueryBase is the core join chain for filter DISTINCT queries, starting from
+// metrics (the smallest table) so Couchbase can use the metrics hidden/component/category
+// indexes to filter rows before joining the larger benchmarks collection.
+const filterQueryBase = "FROM " + metricsKeyspace + " m " +
+	"JOIN " + benchmarksKeyspace + " b ON KEY b.metric FOR m " +
+	"JOIN " + runsKeyspace + " r ON KEYS b.runId "
+
+const filterQueryClustersJoin = "JOIN " + clustersKeyspace + " c ON KEYS r.clusterId "
+
+// osFilterExpr is the N1QL expression that computes the OS label from cluster data.
+const osFilterExpr = "CASE WHEN c.os.distro IS NOT MISSING AND c.os.version IS NOT MISSING THEN c.os.distro || '-' || c.os.version WHEN c.os.distro IS NOT MISSING THEN c.os.distro ELSE TO_STRING(c.os) END"
+
+// filterDirectColMap maps normalized column names to their table-qualified SQL expressions
+// for use in direct-join filter queries (no subquery).
+var filterDirectColMap = map[string]string{
+	"component":        "m.component",
+	"category":         "m.category",
+	"subCategory":      "m.subCategory",
+	"os":               osFilterExpr,
+	"name":             "c.name",
+	"pipelineGroup":    "b.pipelineGroup",
+	"serverMajorMinor": "b.serverMajorMinor",
+}
+
+// columnsNeedingClusters lists the filter dimensions whose SQL expression references
+// the clusters collection (requiring the clusters JOIN).
+var columnsNeedingClusters = map[string]bool{
+	"os":   true,
+	"name": true,
+}
 
 type FilterOptions struct {
-	Components        []string
-	Categories        []string
-	Subcategories     []string
-	Clusters          []string
-	OS                []string
-	PipelineGroups    []string
-	ServerMajorMinors []string
-	Tags              map[string][]string
+	Components           []string
+	Categories           []string
+	Subcategories        []string
+	Clusters             []string
+	OS                   []string
+	PipelineGroups       []string
+	ServerMajorMinors    []string
+	Tags                 map[string][]string
+	ShowHiddenMetrics    bool
+	ShowHiddenBenchmarks bool
 }
 
 type GenericFilterSpec struct {
@@ -75,18 +107,42 @@ func (ds *DataStore) GenericFiltering(filter string, opts FilterOptions, c conte
 		return cached, nil
 	}
 
-	query := "SELECT DISTINCT RAW subquery." + column + " " + baseQuery + "WHERE subquery." + column + "!= \"\""
+	colExpr := filterDirectColMap[column]
+
+	// Include the clusters JOIN only when the queried dimension or an active
+	// cross-filter references the clusters collection (avoids the expensive lookup
+	// for the common case of querying component/category/serverMajorMinor).
+	needsClusters := columnsNeedingClusters[column] || len(opts.OS) > 0 || len(opts.Clusters) > 0
+	from := filterQueryBase
+	if needsClusters {
+		from += filterQueryClustersJoin
+	}
+
+	whereClauses := []string{`r.status = 'completed'`, colExpr + ` != ""`}
+	if !opts.ShowHiddenMetrics {
+		whereClauses = append(whereClauses, "m.hidden = false")
+	}
+	if !opts.ShowHiddenBenchmarks {
+		whereClauses = append(whereClauses, "b.hidden = false")
+	}
+
+	query := "SELECT DISTINCT RAW " + colExpr + " " + from +
+		"WHERE " + strings.Join(whereClauses, " AND ")
 	params := make(map[string]interface{})
-	query, params = addGenericFilterConditions(query, params, opts, map[string]string{
-		"component":        "subquery.component",
-		"category":         "subquery.category",
-		"subCategory":      "subquery.subCategory",
-		"os":               "subquery.os",
-		"name":             "subquery.name",
-		"pipelineGroup":    "subquery.pipelineGroup",
-		"serverMajorMinor": "subquery.serverMajorMinor",
-	}, map[string]bool{column: true})
-	query += ` ORDER BY subquery.` + column
+
+	for _, spec := range GenericFilterSpecs {
+		if spec.column == column {
+			continue
+		}
+		vals := spec.values(opts)
+		if len(vals) == 0 {
+			continue
+		}
+		query += " AND " + filterDirectColMap[spec.column] + " IN $" + spec.param
+		params[spec.param] = vals
+	}
+
+	query += " ORDER BY " + colExpr
 
 	result, err := queryRows[string](ds.cluster, query, params, column, c)
 	if err != nil {
@@ -148,6 +204,75 @@ func (ds *DataStore) GetPipelineGroups(opts FilterOptions, c context.Context) ([
 }
 func (ds *DataStore) GetServerMajorMinors(opts FilterOptions, c context.Context) ([]string, error) {
 	return ds.GenericFiltering("serverMajorMinor", opts, c)
+}
+
+// BulkFilters holds all filter dimension values in a single response.
+type BulkFilters struct {
+	Components        []string `json:"component"`
+	Categories        []string `json:"category"`
+	Subcategories     []string `json:"subcategory"`
+	Clusters          []string `json:"cluster"`
+	OS                []string `json:"os"`
+	PipelineGroups    []string `json:"pipelineGroup"`
+	ServerMajorMinors []string `json:"serverMajorMinor"`
+}
+
+// GetFiltersBulk fetches all 7 filter dimensions concurrently and returns them in one struct.
+// Cached dimensions are served from memory; cache misses run their N1QL query in parallel.
+func (ds *DataStore) GetFiltersBulk(opts FilterOptions, ctx context.Context) (BulkFilters, error) {
+	type entry struct {
+		key string
+		val []string
+		err error
+	}
+
+	fetchers := []struct {
+		key string
+		fn  func(FilterOptions, context.Context) ([]string, error)
+	}{
+		{"component", ds.GetComponents},
+		{"category", ds.GetCategories},
+		{"subcategory", ds.GetSubcategories},
+		{"cluster", ds.GetClusters},
+		{"os", ds.GetOs},
+		{"pipelineGroup", ds.GetPipelineGroups},
+		{"serverMajorMinor", ds.GetServerMajorMinors},
+	}
+
+	ch := make(chan entry, len(fetchers))
+	for _, f := range fetchers {
+		f := f
+		go func() {
+			vals, err := f.fn(opts, ctx)
+			ch <- entry{f.key, vals, err}
+		}()
+	}
+
+	var bulk BulkFilters
+	for range fetchers {
+		e := <-ch
+		if e.err != nil {
+			return BulkFilters{}, e.err
+		}
+		switch e.key {
+		case "component":
+			bulk.Components = e.val
+		case "category":
+			bulk.Categories = e.val
+		case "subcategory":
+			bulk.Subcategories = e.val
+		case "cluster":
+			bulk.Clusters = e.val
+		case "os":
+			bulk.OS = e.val
+		case "pipelineGroup":
+			bulk.PipelineGroups = e.val
+		case "serverMajorMinor":
+			bulk.ServerMajorMinors = e.val
+		}
+	}
+
+	return bulk, nil
 }
 
 func (ds *DataStore) GetFilters(c context.Context) (*map[string][]string, error) {

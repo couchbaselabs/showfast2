@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/cbperf/showfast/pkg/db"
 	"github.com/cbperf/showfast/pkg/models"
@@ -53,9 +54,46 @@ func (h *Handler) GetTimelineV2(c *gin.Context) {
 
 func (h *Handler) GetTimelinePanelsV2(c *gin.Context) {
 	filters := parseFilterOptions(c)
+	limitStr := c.Query("limit")
+
+	if limitStr == "" {
+		// No pagination: return plain array (component view path).
+		executeAndRespond(c, http.StatusOK, func(ctx context.Context) (interface{}, error) {
+			return h.ds.GetTimelinePanels(&filters, ctx)
+		})
+		return
+	}
+
+	limit, _ := strconv.Atoi(limitStr)
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	executeAndRespond(c, http.StatusOK, func(ctx context.Context) (interface{}, error) {
-		return h.ds.GetTimelinePanels(&filters, ctx)
+		all, err := h.ds.GetTimelinePanels(&filters, ctx)
+		if err != nil || all == nil {
+			return nil, err
+		}
+		panels := *all
+		total := len(panels)
+		start := offset
+		if start > total {
+			start = total
+		}
+		end := start + limit
+		if end > total {
+			end = total
+		}
+		return models.PaginatedTimelinesResponse{
+			Panels: panels[start:end],
+			Total:  total,
+			Limit:  limit,
+			Offset: offset,
+		}, nil
 	})
 }
 
@@ -86,7 +124,7 @@ func (h *Handler) GetClusterInfoV2(c *gin.Context) {
 	ctx := extractContextFromGin(c)
 	cluster, err := h.ds.GetClusterInfo(clusterID, ctx)
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	if cluster == nil {

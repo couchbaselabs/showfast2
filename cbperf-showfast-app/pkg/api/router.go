@@ -36,6 +36,7 @@ func SetupRouter(ds *db.DataStore) *gin.Engine {
 	filters := router.Group("/filters")
 	{
 		filters.GET("", h.GetFiltersV2)
+		filters.GET("/bulk", h.GetFiltersBulkV2)
 		filters.GET("/components", h.GetComponentsV2)
 		filters.GET("/categories", h.GetCategoriesV2)
 		filters.GET("/subcategories", h.GetSubcategoriesV2)

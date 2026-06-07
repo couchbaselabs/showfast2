@@ -12,7 +12,7 @@ import (
 func executeAndRespond(c *gin.Context, status int, fn func(context.Context) (interface{}, error)) {
 	result, err := fn(extractContextFromGin(c))
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -95,13 +95,15 @@ func queryValues(c *gin.Context, key string) []string { return normalizeQuerySli
 
 func parseFilterOptions(c *gin.Context) db.FilterOptions {
 	return db.FilterOptions{
-		Components:        queryValues(c, "component"),
-		Categories:        queryValues(c, "category"),
-		Subcategories:     queryValues(c, "subcategory"),
-		Clusters:          queryValues(c, "cluster"),
-		OS:                queryValues(c, "os"),
-		PipelineGroups:    queryValues(c, "pipelineGroup"),
-		ServerMajorMinors: queryValues(c, "serverMajorMinor"),
-		Tags:              extractTagsFromQuery(c),
+		Components:           queryValues(c, "component"),
+		Categories:           queryValues(c, "category"),
+		Subcategories:        queryValues(c, "subcategory"),
+		Clusters:             queryValues(c, "cluster"),
+		OS:                   queryValues(c, "os"),
+		PipelineGroups:       queryValues(c, "pipelineGroup"),
+		ServerMajorMinors:    queryValues(c, "serverMajorMinor"),
+		Tags:                 extractTagsFromQuery(c),
+		ShowHiddenMetrics:    c.Query("showHiddenMetrics") == "true",
+		ShowHiddenBenchmarks: c.Query("showHiddenBenchmarks") == "true",
 	}
 }

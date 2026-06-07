@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/cbperf/showfast/pkg/models"
@@ -96,7 +97,14 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 	query += "JOIN " + benchmarksKeyspace + " b ON KEY b.metric FOR m "
 	query += "JOIN " + runsKeyspace + " r ON KEYS b.runId "
 	query += "JOIN " + clustersKeyspace + " c ON KEYS r.clusterId "
-	query += "WHERE m.hidden = False AND b.hidden = False AND r.status = 'completed'"
+	whereClauses := []string{"r.status = 'completed'"}
+	if !filters.ShowHiddenMetrics {
+		whereClauses = append(whereClauses, "m.hidden = False")
+	}
+	if !filters.ShowHiddenBenchmarks {
+		whereClauses = append(whereClauses, "b.hidden = False")
+	}
+	query += "WHERE " + strings.Join(whereClauses, " AND ")
 	params := make(map[string]interface{})
 	query, params = addGenericFilterConditions(query, params, *filters, map[string]string{
 		"component":        "m.component",
