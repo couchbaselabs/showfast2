@@ -2,16 +2,20 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SelectableValue } from '@grafana/data';
 import { locationService } from '@grafana/runtime';
 import { Input, Select, Spinner, Tab, TabsBar, useTheme2 } from '@grafana/ui';
-import { MenuConfig } from './menuApiTypes';
-import { fetchMenuConfig, fetchPanelsForView } from './menuService';
+import { ComponentConfig, VariantsConfig, dbComponentIDs } from './menuApiTypes';
+import { fetchComponentConfig, fetchPanelsForView, fetchVariantsConfig } from './menuService';
 import { TimelinePanel } from './timelinesApiTypes';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function cacheKey(component: string, category: string): string {
-  return `${component}:${category}`;
+function cacheKey(componentId: string, category: string): string {
+  return `${componentId}:${category}`;
+}
+
+function firstVisibleCategory(cfg: ComponentConfig, variantId: string): string {
+  return cfg.categories.find((c) => c.variants.includes(variantId))?.id ?? '';
 }
 
 // ---------------------------------------------------------------------------
@@ -19,9 +23,7 @@ function cacheKey(component: string, category: string): string {
 // ---------------------------------------------------------------------------
 
 export interface ComponentViewUIProps {
-  /** Called whenever the set of client-side-filtered panels changes. */
   onPanelsChange: (panels: TimelinePanel[]) => void;
-  /** Called when a panel fetch starts (true) or finishes (false). */
   onLoadingChange: (loading: boolean) => void;
 }
 
@@ -32,10 +34,15 @@ export interface ComponentViewUIProps {
 export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentViewUIProps) {
   const theme = useTheme2();
 
-  // Menu loading
-  const [menu, setMenu] = useState<MenuConfig | null>(null);
+  // Stage 1 — variants config (variant defs + ordered component ID list)
+  const [variants, setVariants] = useState<VariantsConfig | null>(null);
   const [menuLoading, setMenuLoading] = useState(true);
   const [menuError, setMenuError] = useState<string | null>(null);
+
+  // Stage 2 — component configs (fetched in parallel, keyed by component ID)
+  const [componentConfigs, setComponentConfigs] = useState<Record<string, ComponentConfig>>({});
+  const componentConfigsRef = useRef(componentConfigs);
+  useEffect(() => { componentConfigsRef.current = componentConfigs; });
 
   // Selections
   const [variantKey, setVariantKey] = useState('');
@@ -50,48 +57,76 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
   // Panel data
   const [panelCache, setPanelCache] = useState<Record<string, TimelinePanel[]>>({});
   const [panelsLoading, setPanelsLoading] = useState(false);
+  const panelCacheRef = useRef(panelCache);
+  useEffect(() => { panelCacheRef.current = panelCache; });
 
-  // True after menu load + URL params have been applied; gates URL writes
+  // URL sync gate — true after full initialization
   const [menuInitialized, setMenuInitialized] = useState(false);
-  // True on the very first URL write after init (use replace so we don't pollute history)
   const firstUrlWriteRef = useRef(true);
 
-  // Keep a ref so the fetch callback can read the latest cache without stale closure
-  const panelCacheRef = useRef(panelCache);
-  panelCacheRef.current = panelCache;
+  // -------------------------------------------------------------------------
+  // Load component configs for the given IDs (fills cache, skips already-loaded)
+  // -------------------------------------------------------------------------
+  const loadComponentConfigs = useCallback(
+    (componentIds: string[]): Promise<Record<string, ComponentConfig>> => {
+      const missing = componentIds.filter((id) => !componentConfigsRef.current[id]);
+      if (!missing.length) {
+        return Promise.resolve(componentConfigsRef.current);
+      }
+      return Promise.all(missing.map((id) => fetchComponentConfig(id).then((cfg) => ({ id, cfg })))).then(
+        (results) => {
+          const patch: Record<string, ComponentConfig> = {};
+          results.forEach(({ id, cfg }) => { patch[id] = cfg; });
+          const merged = { ...componentConfigsRef.current, ...patch };
+          setComponentConfigs(merged);
+          return merged;
+        }
+      );
+    },
+    [] // stable — reads via ref
+  );
 
   // -------------------------------------------------------------------------
-  // Load menu on mount
+  // Mount: fetch variants, then all component configs in parallel
   // -------------------------------------------------------------------------
   useEffect(() => {
-    setMenuLoading(true);
-    fetchMenuConfig()
+    fetchVariantsConfig()
       .then((cfg) => {
-        setMenu(cfg);
+        setVariants(cfg);
 
-        // Restore selections from URL params; fall back to first item when absent/invalid
         const search = locationService.getSearch();
         const urlVariant = search.get('variant');
         const urlComponent = search.get('component');
         const urlCategory = search.get('category');
 
         const v0 = (urlVariant ? cfg.variants.find((v) => v.id === urlVariant) : null) ?? cfg.variants[0];
-        const c0 = (urlComponent ? v0?.components.find((c) => c.id === urlComponent) : null) ?? v0?.components[0];
-        const cat0 = (urlCategory ? c0?.categories.find((c) => c.id === urlCategory) : null) ?? c0?.categories[0];
-
         setVariantKey(v0?.id ?? '');
-        setComponentKey(c0?.id ?? '');
-        setCategoryId(cat0?.id ?? '');
-        setSubCategoryFilter(search.get('sub') ?? '');
-        setOsFilter(search.get('os') ?? '');
-        setSearchText(search.get('q') ?? '');
-        setMenuInitialized(true);
+
+        return loadComponentConfigs(cfg.components).then((configs) => {
+          // Pick starting component: URL param, or first with a visible category in this variant
+          const vId = v0?.id ?? '';
+          const orderedCfgs = cfg.components.map((id) => configs[id]).filter(Boolean);
+          const c0 =
+            (urlComponent ? orderedCfgs.find((c) => c.id === urlComponent) : null) ??
+            orderedCfgs.find((c) => c.categories.some((cat) => cat.variants.includes(vId)));
+          setComponentKey(c0?.id ?? '');
+
+          // Pick starting category: URL param, or first visible in this variant
+          const cat0Id = urlCategory ?? (c0 ? firstVisibleCategory(c0, vId) : '');
+          const cat0 = c0?.categories.find((c) => c.id === cat0Id && c.variants.includes(vId));
+          setCategoryId(cat0?.id ?? (c0 ? firstVisibleCategory(c0, vId) : ''));
+
+          setSubCategoryFilter(search.get('sub') ?? '');
+          setOsFilter(search.get('os') ?? '');
+          setSearchText(search.get('q') ?? '');
+          setMenuInitialized(true);
+        });
       })
       .catch((err: unknown) => {
-        const msg = err instanceof Error ? err.message : 'Failed to load menu';
-        setMenuError(msg);
+        setMenuError(err instanceof Error ? err.message : 'Failed to load menu');
       })
       .finally(() => setMenuLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // -------------------------------------------------------------------------
@@ -120,20 +155,49 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
   // -------------------------------------------------------------------------
   // Derived menu data
   // -------------------------------------------------------------------------
-  const variant = menu?.variants.find((v) => v.id === variantKey);
-  const componentDef = variant?.components.find((c) => c.id === componentKey);
-  const categoryDef = componentDef?.categories.find((c) => c.id === categoryId);
+  const componentConfig = componentConfigs[componentKey] ?? null;
+
+  // Categories for the current component that are visible in the active variant
+  const visibleCategories = useMemo(
+    () => (componentConfig?.categories ?? []).filter((c) => c.variants.includes(variantKey)),
+    [componentConfig, variantKey]
+  );
+
+  const categoryDef = visibleCategories.find((c) => c.id === categoryId) ?? null;
+
+  // Active variant definition — carries CSPs for cloud-type variants
+  const activeVariantDef = variants?.variants.find((v) => v.id === variantKey) ?? null;
+  const variantCSPs = activeVariantDef?.csps ?? [];
 
   const variantOptions: Array<SelectableValue<string>> = useMemo(
-    () => (menu?.variants ?? []).map((v) => ({ value: v.id, label: v.label })),
-    [menu]
+    () => (variants?.variants ?? []).map((v) => ({ value: v.id, label: v.label })),
+    [variants]
+  );
+
+  // Components visible in the active variant (have at least one category for it), sorted by order
+  const visibleComponents = useMemo(() => {
+    if (!variants) { return []; }
+    return variants.components
+      .map((id) => componentConfigs[id])
+      .filter((cfg): cfg is ComponentConfig =>
+        !!cfg && cfg.categories.some((c) => c.variants.includes(variantKey))
+      );
+  }, [variants, componentConfigs, variantKey]);
+
+  const primaryComponents = useMemo(() => visibleComponents.filter((c) => c.primary), [visibleComponents]);
+  const moreComponents = useMemo(() => visibleComponents.filter((c) => !c.primary), [visibleComponents]);
+  const isMoreActive = moreComponents.some((c) => c.id === componentKey);
+
+  const moreOptions: Array<SelectableValue<string>> = useMemo(
+    () => moreComponents.map((c) => ({ value: c.id, label: c.title })),
+    [moreComponents]
   );
 
   // -------------------------------------------------------------------------
-  // Fetch panels when component+category change
+  // Fetch panels when component+category change (uses dbComponents for the query)
   // -------------------------------------------------------------------------
   useEffect(() => {
-    if (!componentKey || !categoryId) {
+    if (!componentKey || !categoryId || !componentConfig) {
       return;
     }
     const key = cacheKey(componentKey, categoryId);
@@ -142,7 +206,7 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
     }
     onLoadingChange(true);
     setPanelsLoading(true);
-    fetchPanelsForView(componentKey, categoryId)
+    fetchPanelsForView(dbComponentIDs(componentConfig), categoryId)
       .then((panels) => {
         setPanelCache((prev) => ({ ...prev, [key]: panels }));
       })
@@ -163,9 +227,7 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
   const allPanels = panelCache[cacheKey(componentKey, categoryId)] ?? null;
 
   const visiblePanels = useMemo(() => {
-    if (!allPanels) {
-      return null;
-    }
+    if (!allPanels) { return null; }
     let panels = allPanels;
     if (subCategoryFilter) {
       panels = panels.filter((p) => p.subCategory === subCategoryFilter);
@@ -190,53 +252,57 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
   // Notify parent when visible panels change
   // -------------------------------------------------------------------------
   useEffect(() => {
-    if (panelsLoading) {
-      return; // parent already got onLoadingChange(true)
-    }
+    if (panelsLoading) { return; }
     onPanelsChange(visiblePanels ?? []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visiblePanels, panelsLoading]);
 
   // -------------------------------------------------------------------------
-  // Selection change handlers — reset client-side filters when data changes
+  // Selection handlers
   // -------------------------------------------------------------------------
   const selectVariant = useCallback(
     (vk: string) => {
-      if (vk === variantKey || !menu) {
-        return;
-      }
-      const v = menu.variants.find((x) => x.id === vk);
-      const c0 = v?.components[0];
+      if (vk === variantKey || !variants) { return; }
       setVariantKey(vk);
-      setComponentKey(c0?.id ?? '');
-      setCategoryId(c0?.categories[0]?.id ?? '');
       setSubCategoryFilter('');
       setOsFilter('');
       setSearchText('');
+
+      // Keep the same component if it has visible categories in the new variant,
+      // otherwise fall back to the first visible one.
+      const configs = componentConfigsRef.current;
+      const orderedCfgs = variants.components.map((id) => configs[id]).filter(Boolean) as ComponentConfig[];
+      const currentCfg = configs[componentKey];
+      const hasVisibleCats = currentCfg?.categories.some((c) => c.variants.includes(vk));
+
+      const nextComp = hasVisibleCats
+        ? currentCfg
+        : orderedCfgs.find((c) => c.categories.some((cat) => cat.variants.includes(vk)));
+
+      if (nextComp && nextComp.id !== componentKey) {
+        setComponentKey(nextComp.id);
+      }
+      setCategoryId(nextComp ? firstVisibleCategory(nextComp, vk) : '');
     },
-    [variantKey, menu]
+    [variantKey, componentKey, variants]
   );
 
   const selectComponent = useCallback(
     (ck: string) => {
-      if (ck === componentKey || !variant) {
-        return;
-      }
-      const comp = variant.components.find((c) => c.id === ck);
+      if (ck === componentKey) { return; }
+      const cfg = componentConfigsRef.current[ck];
       setComponentKey(ck);
-      setCategoryId(comp?.categories[0]?.id ?? '');
+      setCategoryId(cfg ? firstVisibleCategory(cfg, variantKey) : '');
       setSubCategoryFilter('');
       setOsFilter('');
       setSearchText('');
     },
-    [componentKey, variant]
+    [componentKey, variantKey]
   );
 
   const selectCategory = useCallback(
     (id: string) => {
-      if (id === categoryId) {
-        return;
-      }
+      if (id === categoryId) { return; }
       setCategoryId(id);
       setSubCategoryFilter('');
       setOsFilter('');
@@ -262,14 +328,10 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
   }
 
   if (menuError) {
-    return (
-      <div style={{ padding: sp(4), color: c.error.text }}>
-        Menu unavailable: {menuError}
-      </div>
-    );
+    return <div style={{ padding: sp(4), color: c.error.text }}>Menu unavailable: {menuError}</div>;
   }
 
-  if (!menu || !variant || !componentDef) {
+  if (!variants) {
     return <div style={{ padding: sp(4), color: c.text.secondary }}>No menu data.</div>;
   }
 
@@ -302,7 +364,7 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: sp(2) }}>
-      {/* Row 1: variant select · component tabs · OS · search · count */}
+      {/* Row 1: variant select · primary component tabs · More overflow · OS · search · count */}
       <div
         style={{
           display: 'flex',
@@ -321,18 +383,45 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
           />
         )}
 
+        {/* Primary component tabs */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <TabsBar>
-            {variant.components.map((comp) => (
+            {primaryComponents.map((comp) => (
               <Tab
                 key={comp.id}
                 label={comp.title}
-                active={componentKey === comp.id}
+                active={!isMoreActive && componentKey === comp.id}
                 onChangeTab={() => selectComponent(comp.id)}
               />
             ))}
           </TabsBar>
         </div>
+
+        {/* More overflow */}
+        {moreComponents.length > 0 && (
+          <Select
+            options={moreOptions}
+            value={isMoreActive ? componentKey : null}
+            onChange={(opt: SelectableValue<string>) => opt?.value && selectComponent(opt.value)}
+            placeholder="More…"
+            isClearable={false}
+            width={16}
+          />
+        )}
+
+        {/* CSP filter — shown for variants that carry fixed CSP values (e.g. cloud) */}
+        {variantCSPs.length > 0 && (
+          <Select
+            options={[
+              { value: '', label: 'All CSPs' },
+              ...variantCSPs.map((csp) => ({ value: csp, label: csp })),
+            ]}
+            value={subCategoryFilter || ''}
+            onChange={(opt: SelectableValue<string>) => setSubCategoryFilter(opt?.value ?? '')}
+            width={14}
+            isClearable={false}
+          />
+        )}
 
         {availableOS.length > 1 && (
           <Select
@@ -363,22 +452,24 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
         )}
       </div>
 
-      {/* Row 2: category tabs */}
-      <div style={{ borderBottom: `1px solid ${c.border.weak}`, paddingBottom: sp(0.5) }}>
-        <TabsBar>
-          {componentDef.categories.map((cat) => (
-            <Tab
-              key={cat.id}
-              label={cat.title}
-              active={categoryId === cat.id}
-              onChangeTab={() => selectCategory(cat.id)}
-            />
-          ))}
-        </TabsBar>
-      </div>
+      {/* Row 2: category tabs (variant-filtered) */}
+      {visibleCategories.length > 0 && (
+        <div style={{ borderBottom: `1px solid ${c.border.weak}`, paddingBottom: sp(0.5) }}>
+          <TabsBar>
+            {visibleCategories.map((cat) => (
+              <Tab
+                key={cat.id}
+                label={cat.title}
+                active={categoryId === cat.id}
+                onChangeTab={() => selectCategory(cat.id)}
+              />
+            ))}
+          </TabsBar>
+        </div>
+      )}
 
-      {/* Row 3 (conditional): subcategory pills */}
-      {categoryDef && categoryDef.subCategories.length > 0 && (
+      {/* Row 3 (conditional): subcategory pills — hidden when CSP Select is active */}
+      {categoryDef && categoryDef.subCategories.length > 0 && variantCSPs.length === 0 && (
         <div
           style={{
             display: 'flex',

@@ -3,12 +3,12 @@ import { PanelBuilders, SceneDataNode, SceneFlexItem } from '@grafana/scenes';
 import { VizOrientation, VisibilityMode } from '@grafana/schema';
 import { TimelinePanel } from './timelinesApiTypes';
 
-function formatSubtitle(panel: TimelinePanel): string {
+function clusterSubtitle(panel: TimelinePanel): string {
   if (!panel.clusterInfo) {
     return panel.cluster;
   }
   const c = panel.clusterInfo;
-  return `${c.name} | ${c.os} | ${c.cpu} | ${c.memory} | ${c.disk}`;
+  return [c.name, c.os, c.cpu, c.memory, c.disk].filter(Boolean).join('  ·  ');
 }
 
 function formatSnapshotReportUrl(snapshotId: string): string {
@@ -90,7 +90,7 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
 
   const vizPanel = PanelBuilders.barchart()
     .setTitle(panel.title)
-    .setDescription(formatSubtitle(panel))
+    .setDescription(clusterSubtitle(panel))
     .setData(new SceneDataNode({ data: panelData }))
     .setOverrides((b) => {
       b.matchFieldsWithName('buildUrl').overrideCustomFieldConfig('hideFrom', {
@@ -116,6 +116,7 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
     .setOption('xTickLabelRotation', 15)
     .setOption('barWidth', 0.7)
     .setOption('showValue', VisibilityMode.Always)
+    .setOption('legend', { showLegend: false })
     .build();
 
   return new SceneFlexItem({

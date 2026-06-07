@@ -47,11 +47,11 @@ func NewApp(_ context.Context, settings backend.AppInstanceSettings) (instancemg
 		return nil, err
 	}
 	app.DataStore.EnsureIndexes()
-	if err := app.DataStore.LoadMenuConfig(); err != nil {
-		log.DefaultLogger.Warn("menu config unavailable", "err", err)
+	if err := app.DataStore.LoadVariantsConfig(); err != nil {
+		log.DefaultLogger.Warn("variants config unavailable", "err", err)
 	}
 	go app.DataStore.WarmFilterCache(context.Background())
-	go app.DataStore.WarmPanelsFromMenu()
+	go app.DataStore.WarmPanelsFromVariants()
 
 	// Use a httpadapter (provided by the SDK) for resource calls. This allows us
 	// to use a *http.ServeMux for resource calls, so we can map multiple routes

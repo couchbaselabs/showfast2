@@ -11,7 +11,7 @@ import (
 
 type menuStore struct {
 	mu     sync.RWMutex
-	config *models.MenuConfig
+	config *models.VariantsConfig
 }
 
 type DataStore struct {
