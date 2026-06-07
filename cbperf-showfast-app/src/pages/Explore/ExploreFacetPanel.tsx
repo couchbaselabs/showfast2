@@ -16,6 +16,15 @@ export interface ExploreFacetPanelProps {
   onApply: (selected: FilterValues, options: ExploreOptions) => void;
 }
 
+// Dimensions that don't participate in cross-filter narrowing: selecting them
+// doesn't refetch other filter options, and they're excluded from the bulk
+// filter request so the backend doesn't narrow them based on other selections.
+const INDEPENDENT_FILTERS = new Set(['pipelineGroup']);
+
+function toFilterRequest(selected: FilterValues): FilterValues {
+  return Object.fromEntries(Object.entries(selected).filter(([k]) => !INDEPENDENT_FILTERS.has(k)));
+}
+
 const EMPTY_BULK: BulkFilters = {
   component: [],
   category: [],
@@ -214,12 +223,18 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
       });
   }, []);
 
-  const doRefetch = useCallback((nextSelected: FilterValues, nextOptions: ExploreOptions) => {
+  const doRefetch = useCallback((nextSelected: FilterValues) => {
     setLoading(true);
-    const req = fetchBulkFilters(nextSelected, nextOptions)
+    // Independent filters and show-hidden flags are excluded from filter option fetching.
+    const req = fetchBulkFilters(toFilterRequest(nextSelected))
       .then((bulk) => {
         if (inflightRef.current === req) {
-          setOptions(bulk);
+          // Preserve independent dimension options from the initial unfiltered load —
+          // they must always show the full list regardless of other active filters.
+          setOptions((prev) => ({
+            ...bulk,
+            pipelineGroup: prev.pipelineGroup,
+          }));
           setLoading(false);
         }
       })
@@ -245,7 +260,9 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
           delete nextSelected[dim];
         }
         selectedRef.current = nextSelected;
-        doRefetch(nextSelected, exploreOptionsRef.current);
+        if (!INDEPENDENT_FILTERS.has(dim)) {
+          doRefetch(nextSelected);
+        }
         return nextSelected;
       });
     },
@@ -258,7 +275,9 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
         const next = { ...prev };
         delete next[dim];
         selectedRef.current = next;
-        doRefetch(next, exploreOptionsRef.current);
+        if (!INDEPENDENT_FILTERS.has(dim)) {
+          doRefetch(next);
+        }
         return next;
       });
     },
@@ -269,7 +288,7 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
     const next: FilterValues = {};
     selectedRef.current = next;
     setSelected(next);
-    doRefetch(next, exploreOptionsRef.current);
+    doRefetch(next);
   }, [doRefetch]);
 
   const toggleExploreOption = useCallback(
@@ -277,11 +296,11 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
       setExploreOptions((prev) => {
         const next = { ...prev, [key]: !prev[key] };
         exploreOptionsRef.current = next;
-        doRefetch(selectedRef.current, next);
+        // Show-hidden flags don't affect filter options — no refetch needed.
         return next;
       });
     },
-    [doRefetch]
+    []
   );
 
   const totalSelected = Object.values(selected).reduce((sum, vals) => sum + (vals?.length ?? 0), 0);
