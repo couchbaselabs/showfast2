@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GrafanaTheme2 } from '@grafana/data';
 import { Button, Spinner, Switch, useStyles2 } from '@grafana/ui';
 import { css } from '@emotion/css';
-import { FILTER_DEFINITIONS } from './filterConfig';
+import { FILTER_DEFINITIONS } from '../Timelines/filterConfig';
 import {
   BulkFilters,
   ExploreOptions,

@@ -2,7 +2,7 @@ import React from 'react';
 import { SceneApp, useSceneApp } from '@grafana/scenes';
 import { AppRootProps } from '@grafana/data';
 import { PluginPropsContext } from '../../utils/utils.plugin';
-import { explorePage } from '../../pages/Timelines/explorePage';
+import { explorePage } from '../../pages/Explore/explorePage';
 import { homePage } from '../../pages/Home/homePage';
 import { searchPage } from '../../pages/Search/searchPage';
 import { timelinesPage } from '../../pages/Timelines/timelinesPage';

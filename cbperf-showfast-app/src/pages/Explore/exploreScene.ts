@@ -12,9 +12,9 @@ import {
   fetchTimelineBarChartPanelsPage,
   EXPLORE_PAGE_SIZE,
   PaginatedPanelsResponse,
-} from './timelinesPanelsService';
-import { buildBarChartPanelItem } from './timelinesPanelBuilder';
-import { TimelinePanel } from './timelinesApiTypes';
+} from './explorePanelsService';
+import { buildBarChartPanelItem } from '../Timelines/timelinesPanelBuilder';
+import { TimelinePanel } from '../Timelines/timelinesApiTypes';
 
 type ExploreState =
   | { kind: 'idle' }

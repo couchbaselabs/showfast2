@@ -1,6 +1,6 @@
 import { getBackendSrv } from '@grafana/runtime';
 import { API_BASE_URL } from '../../constants';
-import { FILTER_DEFINITIONS } from './filterConfig';
+import { FILTER_DEFINITIONS } from '../Timelines/filterConfig';
 
 export type FilterValues = Partial<Record<string, string[]>>;
 
