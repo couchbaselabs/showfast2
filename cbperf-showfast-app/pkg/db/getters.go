@@ -51,6 +51,7 @@ func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]inter
 		return nil, err
 	}
 
+	buildParseCache := make(map[string]semanticBuildParse)
 	sort.SliceStable(results, func(i, j int) bool {
 		var buildI, buildJ string
 		if len(results[i]) > 0 {
@@ -64,7 +65,7 @@ func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]inter
 			}
 		}
 
-		return compareSemanticBuild(buildI, buildJ) > 0
+		return compareSemanticBuildCached(buildI, buildJ, buildParseCache) > 0
 	})
 
 	return &results, nil
@@ -160,21 +161,11 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 
 	totalPoints := 0
 	panels := make([]models.TimelinePanel, 0, len(panelOrder))
+	panelBuildParseCache := make(map[string]semanticBuildParse)
 	for _, metricID := range panelOrder {
 		pts := panelMap[metricID].BenchmarksValues
 		sort.SliceStable(pts, func(i, j int) bool {
-			ki, _ := parseSemanticBuild(pts[i].Build)
-			kj, _ := parseSemanticBuild(pts[j].Build)
-			if ki[0] != kj[0] {
-				return ki[0] < kj[0]
-			}
-			if ki[1] != kj[1] {
-				return ki[1] < kj[1]
-			}
-			if ki[2] != kj[2] {
-				return ki[2] < kj[2]
-			}
-			return ki[3] < kj[3]
+			return compareSemanticBuildCached(pts[i].Build, pts[j].Build, panelBuildParseCache) < 0
 		})
 		totalPoints += len(pts)
 		panels = append(panels, *panelMap[metricID])
