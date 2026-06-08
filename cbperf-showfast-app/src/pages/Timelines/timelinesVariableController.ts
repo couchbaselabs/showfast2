@@ -129,7 +129,13 @@ export function createTimelineVariableController(onReady?: () => void): Timeline
                 onReady?.();
               }
             }),
-            catchError(() => EMPTY)
+            catchError(() => {
+              if (!initialLoadDone) {
+                initialLoadDone = true;
+                onReady?.();
+              }
+              return EMPTY;
+            })
           )
         )
       )

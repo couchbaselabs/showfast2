@@ -18,7 +18,11 @@ export function BenchmarkDetailController({ children }: { children: React.ReactN
   // which prevents Grafana's variable URL sync from accidentally re-opening it
   // when the user navigates between components or variants.
   const handleClick = useCallback((e: MouseEvent) => {
-    const anchor = (e.target as HTMLElement).closest('a');
+    const target = e.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    const anchor = target.closest('a');
     if (!anchor) {
       return;
     }

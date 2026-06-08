@@ -51,7 +51,7 @@ const AppConfig = ({ plugin }: AppConfigProps) => {
 
         <Button
           variant="secondary"
-          icon={reloadState === 'loading' ? 'fa fa-spinner' : 'sync'}
+          icon={reloadState === 'loading' ? undefined : 'sync'}
           disabled={reloadState === 'loading'}
           onClick={onReloadFilters}
         >
