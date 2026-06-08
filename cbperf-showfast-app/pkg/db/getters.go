@@ -196,6 +196,44 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 	return &panels, nil
 }
 
+// GetTimelinePanelsWithPagination retrieves timeline panels with pagination applied at the datastore level.
+// This prevents pagination logic from being duplicated in the handler and prepares for future optimizations
+// where pagination can be pushed further into the query/aggregation layer.
+func (ds *DataStore) GetTimelinePanelsWithPagination(filters *FilterOptions, limit, offset int, c context.Context) (*models.PaginatedTimelinesResponse, error) {
+	all, err := ds.GetTimelinePanels(filters, c)
+	if err != nil || all == nil {
+		return nil, err
+	}
+
+	panels := *all
+	total := len(panels)
+
+	// Validate and normalize pagination parameters
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Calculate slice bounds
+	start := offset
+	if start > total {
+		start = total
+	}
+	end := start + limit
+	if end > total {
+		end = total
+	}
+
+	return &models.PaginatedTimelinesResponse{
+		Panels: panels[start:end],
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	}, nil
+}
+
 func (ds *DataStore) GetAllRuns(metricID string, build string, c context.Context) ([]models.Run, error) {
 	query := "SELECT DISTINCT RAW r FROM " + benchmarksKeyspace + " b JOIN " + runsKeyspace + " r ON KEYS b.runId WHERE b.metric = $metricID AND b.`build` = $build AND r.status = 'completed' ORDER BY r.dateTime DESC"
 	params := map[string]interface{}{

@@ -64,36 +64,12 @@ func (h *Handler) GetTimelinePanelsV2(c *gin.Context) {
 		return
 	}
 
+	// Pagination requested: use datastore-level paginated method
 	limit, _ := strconv.Atoi(limitStr)
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-	if limit <= 0 {
-		limit = 20
-	}
-	if offset < 0 {
-		offset = 0
-	}
 
 	executeAndRespond(c, http.StatusOK, func(ctx context.Context) (interface{}, error) {
-		all, err := h.ds.GetTimelinePanels(&filters, ctx)
-		if err != nil || all == nil {
-			return nil, err
-		}
-		panels := *all
-		total := len(panels)
-		start := offset
-		if start > total {
-			start = total
-		}
-		end := start + limit
-		if end > total {
-			end = total
-		}
-		return models.PaginatedTimelinesResponse{
-			Panels: panels[start:end],
-			Total:  total,
-			Limit:  limit,
-			Offset: offset,
-		}, nil
+		return h.ds.GetTimelinePanelsWithPagination(&filters, limit, offset, ctx)
 	})
 }
 
