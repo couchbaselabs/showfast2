@@ -16,6 +16,8 @@ import {
 import { buildBarChartPanelItem } from '../Timelines/timelinesPanelBuilder';
 import { TimelinePanel } from '../Timelines/timelinesApiTypes';
 
+const EXPLORE_PANEL_HEIGHT = 400;
+
 type ExploreState =
   | { kind: 'idle' }
   | { kind: 'loading' }
@@ -70,7 +72,14 @@ export function exploreScene(): EmbeddedScene {
   const renderState = (state: ExploreState) => {
     if (state.kind === 'ready') {
       const { response } = state;
-      const panelItems = response.panels.map((p: TimelinePanel) => buildBarChartPanelItem(p));
+      const panelItems = response.panels.map((p: TimelinePanel) =>
+        new SceneFlexItem({
+          ySizing: 'content',
+          minHeight: EXPLORE_PANEL_HEIGHT,
+          height: EXPLORE_PANEL_HEIGHT,
+          body: buildBarChartPanelItem(p).state.body,
+        })
+      );
       const showPagination = response.total > response.limit;
       resultsLayout.setState({
         children: showPagination
