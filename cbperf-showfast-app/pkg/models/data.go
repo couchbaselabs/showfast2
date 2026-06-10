@@ -70,6 +70,13 @@ type RunDoc struct {
 	Versions      map[string]string `json:"versions,omitempty"`
 }
 
+type PaginatedTimelinesResponse struct {
+	Panels []TimelinePanel `json:"panels"`
+	Total  int             `json:"total"`
+	Limit  int             `json:"limit"`
+	Offset int             `json:"offset"`
+}
+
 type TimelinePanel struct {
 	MetricID         string               `json:"metricId"`
 	Title            string               `json:"title"`
@@ -100,6 +107,89 @@ type TimelinePoint struct {
 	Value     float64  `json:"value"`
 	BuildURL  string   `json:"buildUrl,omitempty"`
 	Snapshots []string `json:"snapshots,omitempty"`
+	RunID     string   `json:"runId,omitempty"`
 }
 
 type Run map[string]interface{}
+
+// RunDetail is the fully-joined response for the benchmark detail drawer.
+
+type RunVersions struct {
+	SDK       *string `json:"sdk"`
+	TLS       *string `json:"tls"`
+	Capella   *string `json:"capella"`
+	AIGateway *string `json:"aiGateway"`
+}
+
+type RunDetailBenchmark struct {
+	RunID         string   `json:"runId"`
+	Value         float64  `json:"value"`
+	Build         string   `json:"build"`
+	OS            string   `json:"os"`
+	DateTime      string   `json:"dateTime"`
+	PipelineGroup string   `json:"pipelineGroup"`
+	Hidden        bool     `json:"hidden"`
+	Snapshots     []string `json:"snapshots"`
+}
+
+// RunSummary is one entry in the Reruns list — all benchmark executions
+// for the same metric + build combination.
+type RunSummary struct {
+	RunID     string      `json:"runId"`
+	Value     float64     `json:"value"`
+	DateTime  string      `json:"dateTime"`
+	Attempt   int         `json:"attempt"`
+	BuildURL  string      `json:"buildUrl"`
+	Snapshots []string    `json:"snapshots"`
+	Versions  RunVersions `json:"versions"`
+	Hidden    bool        `json:"hidden"`
+}
+
+type RunDetailMetric struct {
+	Title       string `json:"title"`
+	Component   string `json:"component"`
+	Category    string `json:"category"`
+	SubCategory string `json:"subCategory"`
+	Chirality   *int   `json:"chirality"`
+	MemQuota    int64  `json:"memquota"`
+	Provider    string `json:"provider"`
+}
+
+type RunDetailRun struct {
+	BuildURL string      `json:"buildUrl"`
+	DateTime string      `json:"dateTime"`
+	Attempt  int         `json:"attempt"`
+	Versions RunVersions `json:"versions"`
+}
+
+type RunDetailTest struct {
+	Title      string                 `json:"title"`
+	TestConfig string                 `json:"testConfig"`
+	Threshold  *float64               `json:"threshold"`
+	Tags       map[string]interface{} `json:"tags"`
+}
+
+type RunDetailCluster struct {
+	Name     string `json:"name"`
+	OS       string `json:"os"`
+	CPU      string `json:"cpu"`
+	Memory   string `json:"memory"`
+	Disk     string `json:"disk"`
+	Provider string `json:"provider"`
+}
+
+type RunDetailBuild struct {
+	Version    string `json:"version"`
+	MajorMinor string `json:"majorMinor"`
+	BuildType  string `json:"buildType"`
+}
+
+type RunDetail struct {
+	Benchmark RunDetailBenchmark `json:"benchmark"`
+	Metric    RunDetailMetric    `json:"metric"`
+	Run       RunDetailRun       `json:"run"`
+	Test      RunDetailTest      `json:"test"`
+	Cluster   RunDetailCluster   `json:"cluster"`
+	Build     RunDetailBuild     `json:"build"`
+	Reruns    []RunSummary       `json:"reruns"`
+}

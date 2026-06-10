@@ -2,14 +2,25 @@ package db
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
+	"github.com/cbperf/showfast/pkg/models"
 	"github.com/couchbase/gocb/v2"
 )
 
+type menuStore struct {
+	mu     sync.RWMutex
+	config *models.VariantsConfig
+}
+
 type DataStore struct {
-	cluster     *gocb.Cluster
-	collections map[string]*gocb.Collection
+	cluster           *gocb.Cluster
+	collections       map[string]*gocb.Collection
+	defaultCollection *gocb.Collection
+	cache             *filterCache
+	panels            *panelCache
+	menu              menuStore
 }
 
 const (
@@ -50,12 +61,16 @@ func NewDataStore(connString, username, password string) (*DataStore, error) {
 	ds := &DataStore{
 		cluster:     cluster,
 		collections: make(map[string]*gocb.Collection),
+		cache:       newFilterCache(),
+		panels:      newPanelCache(),
 	}
 
 	bucket := cluster.Bucket(couchbaseBucketName)
 	if err := bucket.WaitUntilReady(couchbaseReadyTimeout, nil); err != nil {
 		return nil, fmt.Errorf("Failed to open Couchbase bucket %s: %v", couchbaseBucketName, err)
 	}
+
+	ds.defaultCollection = bucket.DefaultCollection()
 
 	scope := bucket.Scope(couchbaseScopeName)
 	for _, collectionName := range couchbaseCollections {

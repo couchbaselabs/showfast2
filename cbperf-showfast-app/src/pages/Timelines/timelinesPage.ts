@@ -1,12 +1,11 @@
 import { SceneAppPage } from '@grafana/scenes';
 import { ROUTES } from '../../constants';
 import { prefixRoute } from '../../utils/utils.routing';
-import { timelinesScene } from './timelinesScene';
+import { viewsScene } from './viewsScene';
 
 export const timelinesPage = new SceneAppPage({
-  title: 'Timelines',
+  title: 'Performance Dashboard',
   url: prefixRoute(ROUTES.Timelines),
   routePath: ROUTES.Timelines,
-  subTitle: 'Filter timelines with Grafana-native multi-select template variables.',
-  getScene: () => timelinesScene(),
+  getScene: viewsScene,
 });

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/cbperf/showfast/pkg/db"
 	"github.com/cbperf/showfast/pkg/models"
@@ -53,9 +54,22 @@ func (h *Handler) GetTimelineV2(c *gin.Context) {
 
 func (h *Handler) GetTimelinePanelsV2(c *gin.Context) {
 	filters := parseFilterOptions(c)
+	limitStr := c.Query("limit")
+
+	if limitStr == "" {
+		// No pagination: return plain array (component view path).
+		executeAndRespond(c, http.StatusOK, func(ctx context.Context) (interface{}, error) {
+			return h.ds.GetTimelinePanels(&filters, ctx)
+		})
+		return
+	}
+
+	// Pagination requested: use datastore-level paginated method
+	limit, _ := strconv.Atoi(limitStr)
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
 
 	executeAndRespond(c, http.StatusOK, func(ctx context.Context) (interface{}, error) {
-		return h.ds.GetTimelinePanels(&filters, ctx)
+		return h.ds.GetTimelinePanelsWithPagination(&filters, limit, offset, ctx)
 	})
 }
 
@@ -78,6 +92,29 @@ func (h *Handler) GetFiltersV2(c *gin.Context) {
 	})
 }
 
+func (h *Handler) GetRunDetailV2(c *gin.Context) {
+	runID, ok := requireQueryParam(c, "runId")
+	if !ok {
+		return
+	}
+	metricID, ok := requireQueryParam(c, "metricId")
+	if !ok {
+		return
+	}
+
+	ctx := extractContextFromGin(c)
+	detail, err := h.ds.GetRunDetail(runID, metricID, ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if detail == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	c.JSON(http.StatusOK, detail)
+}
+
 func (h *Handler) GetClusterInfoV2(c *gin.Context) {
 	clusterID, ok := requirePathParam(c, "clusterId")
 	if !ok {
@@ -86,7 +123,7 @@ func (h *Handler) GetClusterInfoV2(c *gin.Context) {
 	ctx := extractContextFromGin(c)
 	cluster, err := h.ds.GetClusterInfo(clusterID, ctx)
 	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	if cluster == nil {

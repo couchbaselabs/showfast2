@@ -37,6 +37,13 @@
     },
     {
       "type": "page",
+      "name": "Metrics Explore",
+      "path": "/a/%PLUGIN_ID%/metrics-explore",
+      "addToNav": true,
+      "defaultNav": false
+    },
+    {
+      "type": "page",
       "name": "Search",
       "path": "/a/%PLUGIN_ID%/search",
       "addToNav": true,

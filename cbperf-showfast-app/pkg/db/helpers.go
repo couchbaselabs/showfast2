@@ -137,8 +137,31 @@ func semanticBuildOrder(buildField, direction string) string {
 }
 
 func compareSemanticBuild(a, b string) int {
-	pa, okA := parseSemanticBuild(a)
-	pb, okB := parseSemanticBuild(b)
+	return compareSemanticBuildCached(a, b, nil)
+}
+
+type semanticBuildParse struct {
+	parts [4]int
+	ok    bool
+}
+
+func parsedSemanticBuild(build string, cache map[string]semanticBuildParse) ([4]int, bool) {
+	if cache != nil {
+		if parsed, found := cache[build]; found {
+			return parsed.parts, parsed.ok
+		}
+	}
+
+	pa, okA := parseSemanticBuild(build)
+	if cache != nil {
+		cache[build] = semanticBuildParse{parts: pa, ok: okA}
+	}
+	return pa, okA
+}
+
+func compareSemanticBuildCached(a, b string, cache map[string]semanticBuildParse) int {
+	pa, okA := parsedSemanticBuild(a, cache)
+	pb, okB := parsedSemanticBuild(b, cache)
 
 	if okA && okB {
 		if pa[0] != pb[0] {
@@ -169,34 +192,32 @@ func compareSemanticBuild(a, b string) int {
 func parseSemanticBuild(build string) ([4]int, bool) {
 	var parts [4]int
 
-	dashSplit := strings.Split(build, "-")
-	if len(dashSplit) != 2 {
+	ver, buildStr, ok := strings.Cut(build, "-")
+	if !ok {
+		return parts, false
+	}
+	major, rest, ok := strings.Cut(ver, ".")
+	if !ok {
+		return parts, false
+	}
+	minor, patch, ok := strings.Cut(rest, ".")
+	if !ok {
 		return parts, false
 	}
 
-	versionSplit := strings.Split(dashSplit[0], ".")
-	if len(versionSplit) != 3 {
+	var err error
+	if parts[0], err = strconv.Atoi(major); err != nil {
 		return parts, false
 	}
-
-	major, err := strconv.Atoi(versionSplit[0])
-	if err != nil {
+	if parts[1], err = strconv.Atoi(minor); err != nil {
 		return parts, false
 	}
-	minor, err := strconv.Atoi(versionSplit[1])
-	if err != nil {
+	if parts[2], err = strconv.Atoi(patch); err != nil {
 		return parts, false
 	}
-	patch, err := strconv.Atoi(versionSplit[2])
-	if err != nil {
+	if parts[3], err = strconv.Atoi(buildStr); err != nil {
 		return parts, false
 	}
-	buildNo, err := strconv.Atoi(dashSplit[1])
-	if err != nil {
-		return parts, false
-	}
-
-	parts[0], parts[1], parts[2], parts[3] = major, minor, patch, buildNo
 	return parts, true
 }
 
