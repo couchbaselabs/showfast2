@@ -227,9 +227,13 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
   const allPanels = panelCache[cacheKey(variantKey, componentKey, categoryId)] ?? null;
 
   const visiblePanels = useMemo(() => {
-    if (!allPanels) { return null; }
+    if (!allPanels) {
+      return null;
+    }
     let panels = allPanels;
-    if (subCategoryFilter) {
+    // When variantCSPs is active, subCategoryFilter is used by the CSP selector.
+    // Only apply the subcategory predicate when the subcategory UI is actually shown.
+    if (subCategoryFilter && variantCSPs.length === 0) {
       panels = panels.filter((p) => p.subCategory === subCategoryFilter);
     }
     if (osFilter) {
@@ -240,7 +244,7 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
       panels = panels.filter((p) => p.title.toLowerCase().includes(q));
     }
     return panels;
-  }, [allPanels, subCategoryFilter, osFilter, searchText]);
+  }, [allPanels, subCategoryFilter, osFilter, searchText, variantCSPs]);
 
   const availableOS = useMemo(
     () =>
