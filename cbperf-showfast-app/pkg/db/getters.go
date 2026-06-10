@@ -71,6 +71,18 @@ func (ds *DataStore) GetTimeline(metricID string, c context.Context) (*[][]inter
 	return &results, nil
 }
 
+// hasBenchmarkDrivenFilters reports whether only benchmark-side filters (pipelineGroup,
+// serverMajorMinor) are active with no metric-side constraints (component, category,
+// subcategory, title search, or tags). When true, driving the query from benchmarks
+// and using idx_benchmarks_pipelinegroup_hidden is far more efficient than scanning
+// all metrics and filtering their benchmarks after the join.
+func hasBenchmarkDrivenFilters(filters *FilterOptions) bool {
+	hasMetricFilters := len(filters.Components) > 0 || len(filters.Categories) > 0 ||
+		len(filters.Subcategories) > 0 || filters.TitleSearch != "" || len(filters.Tags) > 0
+	hasBenchmarkFilters := len(filters.PipelineGroups) > 0 || len(filters.ServerMajorMinors) > 0
+	return !hasMetricFilters && hasBenchmarkFilters
+}
+
 func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context) (*[]models.TimelinePanel, error) {
 	if isPureViewQuery(filters) {
 		key := panelCacheKey(filters.Components[0], filters.Categories[0])
@@ -88,17 +100,33 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 		RunID     string   `json:"runId"`
 	}
 
-	// Drive from metrics (small, filterable by component/category via idx_metrics_hidden_filters),
-	// then find benchmarks via ON KEY b.metric FOR m (uses idx_benchmarks_metric_hidden).
-	// This is much faster than the reverse: scanning all benchmarks then filtering on joined metric fields.
-	query := "SELECT m.id AS metricId, m.`title` AS title, m.component AS component, m.category AS category, "
-	query += "m.subCategory AS subCategory, r.clusterId AS `cluster`, m.tags AS tags, "
-	query += "{\"name\": c.name, \"os\": CASE WHEN c.os.distro IS NOT MISSING AND c.os.version IS NOT MISSING THEN c.os.distro || '-' || c.os.version WHEN c.os.distro IS NOT MISSING THEN c.os.distro ELSE TO_STRING(c.os) END, \"cpu\": c.cpu, \"disk\": c.disk, \"memory\": c.memory} AS clusterInfo, "
-	query += "b.`build` AS `build`, b.`value` AS `value`, r.`buildURL` AS `buildUrl`, b.`snapshots` AS snapshots, b.runId AS runId "
-	query += "FROM " + metricsKeyspace + " m "
-	query += "JOIN " + benchmarksKeyspace + " b ON KEY b.metric FOR m "
-	query += "JOIN " + runsKeyspace + " r ON KEYS b.runId "
-	query += "JOIN " + clustersKeyspace + " c ON KEYS r.clusterId "
+	// Choose the driving collection based on the active filters:
+	// - Metrics-first (default): efficient when component/category/title filters narrow metrics early.
+	// - Benchmarks-first: used when only benchmark-side filters (pipelineGroup, serverMajorMinor) are
+	//   active and no metric-side constraints exist. Drives from benchmarks using
+	//   idx_benchmarks_pipelinegroup_hidden so Couchbase does an index seek rather than scanning
+	//   all metrics and expanding their benchmarks before filtering.
+	selectClause := "SELECT m.id AS metricId, m.`title` AS title, m.component AS component, m.category AS category, "
+	selectClause += "m.subCategory AS subCategory, r.clusterId AS `cluster`, m.tags AS tags, "
+	selectClause += "{\"name\": c.name, \"os\": CASE WHEN c.os.distro IS NOT MISSING AND c.os.version IS NOT MISSING THEN c.os.distro || '-' || c.os.version WHEN c.os.distro IS NOT MISSING THEN c.os.distro ELSE TO_STRING(c.os) END, \"cpu\": c.cpu, \"disk\": c.disk, \"memory\": c.memory} AS clusterInfo, "
+	selectClause += "b.`build` AS `build`, b.`value` AS `value`, r.`buildURL` AS `buildUrl`, b.`snapshots` AS snapshots, b.runId AS runId "
+
+	var fromClause string
+	if hasBenchmarkDrivenFilters(filters) {
+		// Benchmark-side-only filters: drive from benchmarks so the pipelineGroup index is the seek point.
+		fromClause = "FROM " + benchmarksKeyspace + " b " +
+			"JOIN " + metricsKeyspace + " m ON KEYS b.metric " +
+			"JOIN " + runsKeyspace + " r ON KEYS b.runId " +
+			"JOIN " + clustersKeyspace + " c ON KEYS r.clusterId "
+	} else {
+		// Metric-side filters present: drive from metrics for index efficiency.
+		fromClause = "FROM " + metricsKeyspace + " m " +
+			"JOIN " + benchmarksKeyspace + " b ON KEY b.metric FOR m " +
+			"JOIN " + runsKeyspace + " r ON KEYS b.runId " +
+			"JOIN " + clustersKeyspace + " c ON KEYS r.clusterId "
+	}
+
+	query := selectClause + fromClause
 	whereClauses := []string{"r.status = 'completed'"}
 	if !filters.ShowHiddenMetrics {
 		whereClauses = append(whereClauses, "m.hidden = False")

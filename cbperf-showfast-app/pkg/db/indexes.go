@@ -46,6 +46,14 @@ var requiredIndexes = []requiredIndex{
 		name:     "idx_metrics_hidden_filters",
 		fields:   "hidden, component, category, subCategory",
 	},
+	{
+		// Supports the benchmarks-first query path used when pipelineGroup (or serverMajorMinor)
+		// is the only active filter and there are no metric-side constraints.
+		// Allows Couchbase to seek benchmarks by pipelineGroup without a full collection scan.
+		keyspace: benchmarksKeyspace,
+		name:     "idx_benchmarks_pipelinegroup_hidden",
+		fields:   "pipelineGroup, hidden",
+	},
 }
 
 // EnsureIndexes creates required indexes if they do not already exist.
