@@ -89,6 +89,21 @@ function getStyles(theme: GrafanaTheme2) {
       justifyContent: 'space-between',
       alignItems: 'center',
       padding: theme.spacing(1.25, 2, 0.5),
+      cursor: 'pointer',
+      userSelect: 'none',
+    }),
+    facetHeaderLeft: css({
+      display: 'flex',
+      alignItems: 'center',
+      gap: theme.spacing(0.75),
+      minWidth: 0,
+    }),
+    facetChevron: css({
+      fontSize: 11,
+      color: theme.colors.text.secondary,
+      width: 12,
+      textAlign: 'center',
+      flexShrink: 0,
     }),
     facetLabel: css({
       fontSize: 11,
@@ -198,6 +213,7 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
   const styles = useStyles2(getStyles);
   const [options, setOptions] = useState<BulkFilters>(EMPTY_BULK);
   const [selected, setSelected] = useState<FilterValues>({});
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [exploreOptions, setExploreOptions] = useState<ExploreOptions>(DEFAULT_EXPLORE_OPTIONS);
   const [loading, setLoading] = useState(true);
   const inflightRef = useRef<Promise<void> | null>(null);
@@ -294,6 +310,10 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
 
   const totalSelected = Object.values(selected).reduce((sum, vals) => sum + (vals?.length ?? 0), 0);
 
+  const toggleCollapsed = useCallback((dim: string) => {
+    setCollapsed((prev) => ({ ...prev, [dim]: !(prev[dim] ?? false) }));
+  }, []);
+
   return (
     <div className={styles.panel}>
       <div className={styles.header}>
@@ -352,6 +372,7 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
         {FILTER_DEFINITIONS.map((def) => {
           const bulkKey = NAME_TO_BULK_KEY[def.name];
           const checkedSet = new Set(selected[def.name] ?? []);
+          const isCollapsed = collapsed[def.name] ?? false;
 
           // Merge available options with any currently-selected values so selected
           // items don't disappear while other filters narrow the list.
@@ -363,43 +384,66 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
 
           return (
             <div key={def.name} className={styles.facetSection}>
-              <div className={styles.facetHeader}>
-                <span className={styles.facetLabel}>{def.label}</span>
+              <div
+                className={styles.facetHeader}
+                role="button"
+                tabIndex={0}
+                aria-expanded={!isCollapsed}
+                onClick={() => toggleCollapsed(def.name)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleCollapsed(def.name);
+                  }
+                }}
+              >
+                <span className={styles.facetHeaderLeft}>
+                  <span className={styles.facetChevron}>{isCollapsed ? '▸' : '▾'}</span>
+                  <span className={styles.facetLabel}>{def.label}</span>
+                </span>
                 {checkedSet.size > 0 && (
-                  <button className={styles.clearDimBtn} onClick={() => clearDim(def.name)}>
+                  <button
+                    className={styles.clearDimBtn}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearDim(def.name);
+                    }}
+                  >
                     clear
                   </button>
                 )}
               </div>
 
-              <div className={`${styles.facetValues}${loading ? ` ${styles.facetValuesLoading}` : ''}`}>
-                {merged.length === 0 ? (
-                  <span className={styles.noOptions}>{loading ? '…' : 'No options'}</span>
-                ) : (
-                  merged.map((value) => {
-                    const isChecked = checkedSet.has(value);
-                    return (
-                      <div
-                        key={value}
-                        className={`${styles.facetValueRow}${isChecked ? ` ${styles.facetValueRowSelected}` : ''}`}
-                        onClick={() => toggle(def.name, value)}
-                      >
+              {!isCollapsed && (
+                <div className={`${styles.facetValues}${loading ? ` ${styles.facetValuesLoading}` : ''}`}>
+                  {merged.length === 0 ? (
+                    <span className={styles.noOptions}>{loading ? '…' : 'No options'}</span>
+                  ) : (
+                    merged.map((value) => {
+                      const isChecked = checkedSet.has(value);
+                      return (
                         <div
-                          className={`${styles.checkboxBox}${isChecked ? ` ${styles.checkboxBoxChecked}` : ''}`}
+                          key={value}
+                          className={`${styles.facetValueRow}${isChecked ? ` ${styles.facetValueRowSelected}` : ''}`}
+                          onClick={() => toggle(def.name, value)}
                         >
-                          {isChecked && <span className={styles.checkMark}>✓</span>}
+                          <div
+                            className={`${styles.checkboxBox}${isChecked ? ` ${styles.checkboxBoxChecked}` : ''}`}
+                          >
+                            {isChecked && <span className={styles.checkMark}>✓</span>}
+                          </div>
+                          <span
+                            className={`${styles.facetValueText}${isChecked ? ` ${styles.facetValueTextSelected}` : ''}`}
+                            title={value}
+                          >
+                            {value}
+                          </span>
                         </div>
-                        <span
-                          className={`${styles.facetValueText}${isChecked ? ` ${styles.facetValueTextSelected}` : ''}`}
-                          title={value}
-                        >
-                          {value}
-                        </span>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
