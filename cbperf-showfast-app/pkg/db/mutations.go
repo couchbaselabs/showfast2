@@ -6,11 +6,11 @@ import (
 
 	"github.com/cbperf/showfast/pkg/models"
 	"github.com/couchbase/gocb/v2"
+	"github.com/google/uuid"
 )
 
 func (ds *DataStore) AddMetric(metric models.Metric, c context.Context) error {
 	collection := ds.GetCollection("metrics")
-
 	_, err := collection.Upsert(metric.ID, metric, &gocb.UpsertOptions{Context: c})
 	return err
 }
@@ -18,16 +18,56 @@ func (ds *DataStore) AddMetric(metric models.Metric, c context.Context) error {
 // inserts/updates a hardware/os profile
 func (ds *DataStore) AddCluster(cluster models.Cluster, c context.Context) error {
 	collection := ds.GetCollection("clusters")
-	_, err := collection.Upsert(cluster.Name, cluster, &gocb.UpsertOptions{Context: c})
+	if cluster.ID == "" {
+		return fmt.Errorf("cluster id is required")
+	}
+	_, err := collection.Upsert(cluster.ID, cluster, &gocb.UpsertOptions{Context: c})
+	return err
+}
+
+func (ds *DataStore) AddTest(test models.Test, c context.Context) error {
+	if test.ID == "" {
+		return fmt.Errorf("test id is required")
+	}
+	_, err := ds.GetCollection("tests").Upsert(test.ID, test, &gocb.UpsertOptions{Context: c})
+	return err
+}
+
+func (ds *DataStore) AddBuild(build models.Build, c context.Context) error {
+	if build.ID == "" {
+		return fmt.Errorf("build id is required")
+	}
+	if build.Component == "" {
+		build.Component = "server"
+	}
+	_, err := ds.GetCollection("builds").Upsert(build.ID, build, &gocb.UpsertOptions{Context: c})
+	return err
+}
+
+func (ds *DataStore) AddRun(run models.RunDoc, c context.Context) error {
+	if run.ID == "" {
+		return fmt.Errorf("run id is required")
+	}
+	if run.Status == "" {
+		run.Status = "completed"
+	}
+	_, err := ds.GetCollection("runs").Upsert(run.ID, run, &gocb.UpsertOptions{Context: c})
 	return err
 }
 
 func (ds *DataStore) AddBenchmark(benchmark models.Benchmark, c context.Context) error {
+	if benchmark.ID == "" {
+		benchmark.ID = uuid.NewString()
+	}
+	if benchmark.RunID == "" {
+		return fmt.Errorf("runId is required")
+	}
+
 	updateQuery := `
-		UPDATE benchmarks 
+		UPDATE ` + benchmarksKeyspace + ` 
 		SET hidden = True 
 		WHERE metric = $metric AND build = $build AND hidden = False`
-	
+
 	params := map[string]interface{}{
 		"metric": benchmark.Metric,
 		"build":  benchmark.Build,
@@ -39,7 +79,7 @@ func (ds *DataStore) AddBenchmark(benchmark models.Benchmark, c context.Context)
 
 	collection := ds.GetCollection("benchmarks")
 	_, err := collection.Upsert(benchmark.ID, benchmark, &gocb.UpsertOptions{Context: c})
-	
+
 	return err
 }
 

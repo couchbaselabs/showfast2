@@ -2,13 +2,15 @@ import React from 'react';
 import { SceneApp, useSceneApp } from '@grafana/scenes';
 import { AppRootProps } from '@grafana/data';
 import { PluginPropsContext } from '../../utils/utils.plugin';
+import { explorePage } from '../../pages/Explore/explorePage';
 import { homePage } from '../../pages/Home/homePage';
 import { searchPage } from '../../pages/Search/searchPage';
 import { timelinesPage } from '../../pages/Timelines/timelinesPage';
+import { BenchmarkDetailController } from './BenchmarkDetailController';
 
 function getSceneApp() {
   return new SceneApp({
-    pages: [homePage, timelinesPage, searchPage],
+    pages: [homePage, timelinesPage, explorePage, searchPage],
     urlSyncOptions: {
       // Keep deep-link query params (including custom tag filters) intact on first load.
       updateUrlOnInit: false,
@@ -26,8 +28,10 @@ function AppWithScenes() {
 function App(props: AppRootProps) {
   return (
     <PluginPropsContext.Provider value={props}>
-      <AppWithScenes />
-    </PluginPropsContext.Provider> 
+      <BenchmarkDetailController>
+        <AppWithScenes />
+      </BenchmarkDetailController>
+    </PluginPropsContext.Provider>
   );
 }
 

@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { Button } from '@grafana/ui';
 import {
   EmbeddedScene,
   SceneReactObject,
@@ -85,13 +86,27 @@ export function timelinesScene() {
     }
   };
 
+  // Pass refreshPanels as onReady so panels load once after variables have resolved
+  // their values from the URL — prevents querying with $__all on first render.
   const controller = createTimelineVariableController(() => {
-    return refreshPanels();
+    void refreshPanels();
+  });
+
+  const applyFiltersControl = new SceneReactObject({
+    reactNode: React.createElement(Button, {
+      variant: 'primary',
+      size: 'sm',
+      icon: 'sync',
+      onClick: () => {
+        void refreshPanels();
+      },
+      children: 'Apply',
+    }),
   });
 
   return new EmbeddedScene({
     $variables: new SceneVariableSet({ variables: controller.variables }),
     body,
-    controls: [new VariableValueSelectors({}), new SceneControlsSpacer()],
+    controls: [new VariableValueSelectors({}), new SceneControlsSpacer(), applyFiltersControl],
   });
 }

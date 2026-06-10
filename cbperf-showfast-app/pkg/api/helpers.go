@@ -1,11 +1,52 @@
 package api
 
-import(
+import (
 	"context"
+	"net/http"
 	"strings"
-	"github.com/gin-gonic/gin"
+
 	"github.com/cbperf/showfast/pkg/db"
+	"github.com/gin-gonic/gin"
 )
+
+func executeAndRespond(c *gin.Context, status int, fn func(context.Context) (interface{}, error)) {
+	result, err := fn(extractContextFromGin(c))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(status, result)
+}
+
+func bindJSONOrAbort(c *gin.Context, dst interface{}) bool {
+	if err := c.ShouldBindJSON(dst); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return false
+	}
+
+	return true
+}
+
+func requireQueryParam(c *gin.Context, key string) (string, bool) {
+	value := c.Query(key)
+	if value == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": key + " query parameter is required"})
+		return "", false
+	}
+
+	return value, true
+}
+
+func requirePathParam(c *gin.Context, key string) (string, bool) {
+	value := c.Param(key)
+	if value == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": key + " parameter is required"})
+		return "", false
+	}
+
+	return value, true
+}
 
 func extractContextFromGin(c *gin.Context) context.Context {
 	return c.Request.Context()
@@ -24,6 +65,7 @@ func normalizeQuerySlice(raw []string) []string {
 	}
 	return normalized
 }
+
 // parses url query params like tag.foo=v1,v2 or tag.foo=v1&tag.foo=v2
 func extractTagsFromQuery(c *gin.Context) map[string][]string {
 	tags := make(map[string][]string)
@@ -53,11 +95,16 @@ func queryValues(c *gin.Context, key string) []string { return normalizeQuerySli
 
 func parseFilterOptions(c *gin.Context) db.FilterOptions {
 	return db.FilterOptions{
-		Components:    queryValues(c, "component"),
-		Categories:    queryValues(c, "category"),
-		Subcategories: queryValues(c, "subcategory"),
-		Clusters:      queryValues(c, "cluster"),
-		OS:            queryValues(c, "os"),
-		Tags: 		   extractTagsFromQuery(c),
+		Components:           queryValues(c, "component"),
+		Categories:           queryValues(c, "category"),
+		Subcategories:        queryValues(c, "subcategory"),
+		Clusters:             queryValues(c, "cluster"),
+		OS:                   queryValues(c, "os"),
+		PipelineGroups:       queryValues(c, "pipelineGroup"),
+		ServerMajorMinors:    queryValues(c, "serverMajorMinor"),
+		Tags:                 extractTagsFromQuery(c),
+		ShowHiddenMetrics:    c.Query("showHiddenMetrics") == "true",
+		ShowHiddenBenchmarks: c.Query("showHiddenBenchmarks") == "true",
+		TitleSearch:          strings.TrimSpace(c.Query("q")),
 	}
 }

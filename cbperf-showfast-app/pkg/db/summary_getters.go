@@ -9,7 +9,7 @@ func (ds *DataStore) GetTestsRanLastMonthCount(c context.Context) (int64, error)
 		TestsRanLastMonth int64 `json:"testsRanLastMonth"`
 	}
 
-	query := "SELECT COUNT(b.dateTime) AS testsRanLastMonth FROM benchmarks b WHERE b.hidden = False AND STR_TO_MILLIS(b.dateTime) > DATE_ADD_MILLIS(NOW_MILLIS(), -28, 'day')"
+	query := "SELECT COUNT(r.id) AS testsRanLastMonth FROM " + runsKeyspace + " r WHERE r.status = 'completed' AND STR_TO_MILLIS(r.dateTime) > DATE_ADD_MILLIS(NOW_MILLIS(), -28, 'day')"
 	rows, err := queryRows[summaryRow](ds.cluster, query, nil, "tests-ran-last-month summary", c)
 	if err != nil {
 		return 0, err
@@ -29,11 +29,14 @@ func (ds *DataStore) GetTestsRanForEachComponentLast2Weeks(c context.Context) (*
 	}
 
 	query := `
-		SELECT m.component AS component, COUNT(m.component) AS number_of
-		FROM metrics AS m
-		JOIN benchmarks AS b ON m.id = b.metric
+		SELECT m.component AS component, COUNT(DISTINCT r.id) AS number_of
+		FROM ` + benchmarksKeyspace + ` b
+		JOIN ` + runsKeyspace + ` r ON KEYS b.runId
+		JOIN ` + metricsKeyspace + ` m ON KEYS b.metric
 		WHERE m.hidden = false
-		  AND STR_TO_MILLIS(b.dateTime) > DATE_ADD_MILLIS(NOW_MILLIS(), -28, 'day')
+		  AND b.hidden = false
+		  AND r.status = 'completed'
+		  AND STR_TO_MILLIS(r.dateTime) > DATE_ADD_MILLIS(NOW_MILLIS(), -28, 'day')
 		GROUP BY m.component
 		ORDER BY m.component asc 
 	`

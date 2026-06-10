@@ -3,12 +3,12 @@ import { PanelBuilders, SceneDataNode, SceneFlexItem } from '@grafana/scenes';
 import { VizOrientation, VisibilityMode } from '@grafana/schema';
 import { TimelinePanel } from './timelinesApiTypes';
 
-function formatSubtitle(panel: TimelinePanel): string {
+function clusterSubtitle(panel: TimelinePanel): string {
   if (!panel.clusterInfo) {
     return panel.cluster;
   }
   const c = panel.clusterInfo;
-  return `${c.name} | ${c.os} | ${c.cpu} | ${c.memory} | ${c.disk}`;
+  return [c.name, c.os, c.cpu, c.memory, c.disk].filter(Boolean).join('  ·  ');
 }
 
 function formatSnapshotReportUrl(snapshotId: string): string {
@@ -19,8 +19,26 @@ function formatSnapshotReportUrl(snapshotId: string): string {
   return `https://cbmonitor2.sc.couchbase.com/a/cbmonitor/snapshots/${encodeURIComponent(snapshotId)}`;
 }
 
+function dynamicBarWidth(barCount: number): number {
+  // Keep bars readable for dense panels while allowing fuller bars for sparse panels.
+  if (barCount <= 8) {
+    return 0.85;
+  }
+  if (barCount <= 16) {
+    return 0.75;
+  }
+  if (barCount <= 28) {
+    return 0.65;
+  }
+  if (barCount <= 40) {
+    return 0.55;
+  }
+  return 0.45;
+}
+
 export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
   const points = panel.benchmarksValues ?? [];
+  const barWidth = dynamicBarWidth(points.length);
   const snapshotIds = points.map((p) => (p.snapshots ?? []).filter((value) => value.length > 0));
   const maxSnapshotCount = snapshotIds.reduce((maxCount, ids) => Math.max(maxCount, ids.length), 0);
   const snapshotLinks = Array.from({ length: maxSnapshotCount }, (_, index) => ({
@@ -56,6 +74,11 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
               url: '${__data.fields.buildUrl}',
               targetBlank: true,
             },
+            {
+              title: 'View details',
+              url: '${__url.path}?${__url.params}&detailRunId=${__data.fields.runId}&detailMetricId=${__data.fields.metricId}',
+              targetBlank: false,
+            },
             ...snapshotLinks,
           ],
         },
@@ -66,6 +89,18 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
         type: FieldType.string,
         config: {},
         values: points.map((p) => p.buildUrl ?? ''),
+      },
+      {
+        name: 'runId',
+        type: FieldType.string,
+        config: {},
+        values: points.map((p) => p.runId ?? ''),
+      },
+      {
+        name: 'metricId',
+        type: FieldType.string,
+        config: {},
+        values: points.map(() => panel.metricId),
       },
       {
         name: 'snapshots',
@@ -90,10 +125,20 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
 
   const vizPanel = PanelBuilders.barchart()
     .setTitle(panel.title)
-    .setDescription(formatSubtitle(panel))
+    .setDescription(clusterSubtitle(panel))
     .setData(new SceneDataNode({ data: panelData }))
     .setOverrides((b) => {
       b.matchFieldsWithName('buildUrl').overrideCustomFieldConfig('hideFrom', {
+        tooltip: true,
+        viz: true,
+        legend: true,
+      });
+      b.matchFieldsWithName('runId').overrideCustomFieldConfig('hideFrom', {
+        tooltip: true,
+        viz: true,
+        legend: true,
+      });
+      b.matchFieldsWithName('metricId').overrideCustomFieldConfig('hideFrom', {
         tooltip: true,
         viz: true,
         legend: true,
@@ -114,12 +159,14 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
     .setOption('orientation', VizOrientation.Vertical)
     .setOption('xField', 'build')
     .setOption('xTickLabelRotation', 15)
-    .setOption('barWidth', 0.7)
+    .setOption('barWidth', barWidth)
+    .setOption('text', { valueSize: 12 })
     .setOption('showValue', VisibilityMode.Always)
+    .setOption('legend', { showLegend: false })
     .build();
 
   return new SceneFlexItem({
-    minHeight: 300,
+    minHeight: 350,
     body: vizPanel,
   });
 }
