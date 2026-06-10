@@ -19,8 +19,26 @@ function formatSnapshotReportUrl(snapshotId: string): string {
   return `https://cbmonitor2.sc.couchbase.com/a/cbmonitor/snapshots/${encodeURIComponent(snapshotId)}`;
 }
 
+function dynamicBarWidth(barCount: number): number {
+  // Keep bars readable for dense panels while allowing fuller bars for sparse panels.
+  if (barCount <= 8) {
+    return 0.85;
+  }
+  if (barCount <= 16) {
+    return 0.75;
+  }
+  if (barCount <= 28) {
+    return 0.65;
+  }
+  if (barCount <= 40) {
+    return 0.55;
+  }
+  return 0.45;
+}
+
 export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
   const points = panel.benchmarksValues ?? [];
+  const barWidth = dynamicBarWidth(points.length);
   const snapshotIds = points.map((p) => (p.snapshots ?? []).filter((value) => value.length > 0));
   const maxSnapshotCount = snapshotIds.reduce((maxCount, ids) => Math.max(maxCount, ids.length), 0);
   const snapshotLinks = Array.from({ length: maxSnapshotCount }, (_, index) => ({
@@ -141,13 +159,14 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
     .setOption('orientation', VizOrientation.Vertical)
     .setOption('xField', 'build')
     .setOption('xTickLabelRotation', 15)
-    .setOption('barWidth', 0.7)
+    .setOption('barWidth', barWidth)
+    .setOption('text', { valueSize: 12 })
     .setOption('showValue', VisibilityMode.Always)
     .setOption('legend', { showLegend: false })
     .build();
 
   return new SceneFlexItem({
-    minHeight: 300,
+    minHeight: 350,
     body: vizPanel,
   });
 }
