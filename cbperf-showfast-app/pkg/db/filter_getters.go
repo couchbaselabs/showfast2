@@ -143,6 +143,12 @@ func (ds *DataStore) GenericFiltering(filter string, opts FilterOptions, c conte
 		params[spec.param] = vals
 	}
 
+	tagClause, tagParams := buildTagFilters(opts.Tags)
+	query += tagClause
+	for k, v := range tagParams {
+		params[k] = v
+	}
+
 	query += " ORDER BY " + colExpr
 
 	result, err := queryRows[string](ds.cluster, query, params, column, c)
