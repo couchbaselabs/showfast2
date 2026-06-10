@@ -44,10 +44,10 @@ function getStyles(theme: GrafanaTheme2) {
       width: 220,
       minWidth: 220,
       flexShrink: 0,
-      height: '100%',
+      height: 'auto',
       backgroundColor: theme.colors.background.secondary,
       borderRight: `1px solid ${theme.colors.border.weak}`,
-      overflowY: 'auto',
+      overflow: 'visible',
     }),
     header: css({
       display: 'flex',
@@ -78,8 +78,8 @@ function getStyles(theme: GrafanaTheme2) {
       borderBottom: `1px solid ${theme.colors.border.weak}`,
     }),
     facets: css({
-      flex: 1,
-      overflowY: 'auto',
+      flex: '0 0 auto',
+      overflow: 'visible',
     }),
     facetSection: css({
       borderBottom: `1px solid ${theme.colors.border.weak}`,
