@@ -16,15 +16,6 @@ export interface ExploreFacetPanelProps {
   onApply: (selected: FilterValues, options: ExploreOptions) => void;
 }
 
-// Dimensions that don't participate in cross-filter narrowing: selecting them
-// doesn't refetch other filter options, and they're excluded from the bulk
-// filter request so the backend doesn't narrow them based on other selections.
-const INDEPENDENT_FILTERS = new Set(['pipelineGroup']);
-
-function toFilterRequest(selected: FilterValues): FilterValues {
-  return Object.fromEntries(Object.entries(selected).filter(([k]) => !INDEPENDENT_FILTERS.has(k)));
-}
-
 const EMPTY_BULK: BulkFilters = {
   component: [],
   category: [],
@@ -229,16 +220,11 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
 
   const doRefetch = useCallback((nextSelected: FilterValues) => {
     setLoading(true);
-    // Independent filters and show-hidden flags are excluded from filter option fetching.
-    const req = fetchBulkFilters(toFilterRequest(nextSelected))
+    // Show-hidden flags are UI-only options; selected filter dimensions should all participate.
+    const req = fetchBulkFilters(nextSelected)
       .then((bulk) => {
         if (inflightRef.current === req) {
-          // Preserve independent dimension options from the initial unfiltered load —
-          // they must always show the full list regardless of other active filters.
-          setOptions((prev) => ({
-            ...bulk,
-            pipelineGroup: prev.pipelineGroup,
-          }));
+          setOptions(bulk);
           setLoading(false);
         }
       })
@@ -264,9 +250,7 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
           delete nextSelected[dim];
         }
         selectedRef.current = nextSelected;
-        if (!INDEPENDENT_FILTERS.has(dim)) {
-          doRefetch(nextSelected);
-        }
+        doRefetch(nextSelected);
         return nextSelected;
       });
     },
@@ -279,9 +263,7 @@ export function ExploreFacetPanel({ onApply }: ExploreFacetPanelProps) {
         const next = { ...prev };
         delete next[dim];
         selectedRef.current = next;
-        if (!INDEPENDENT_FILTERS.has(dim)) {
-          doRefetch(next);
-        }
+        doRefetch(next);
         return next;
       });
     },
