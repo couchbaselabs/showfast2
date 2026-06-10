@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/cbperf/showfast/pkg/db"
 	"github.com/cbperf/showfast/pkg/models"
@@ -153,6 +154,11 @@ func (h *Handler) AddClusterV2(c *gin.Context) {
 	if !bindJSONOrAbort(c, &cluster) {
 		return
 	}
+	cluster.ID = strings.TrimSpace(cluster.ID)
+	if cluster.ID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
 
 	executeAndRespond(c, http.StatusCreated, func(ctx context.Context) (interface{}, error) {
 		if err := h.ds.AddCluster(cluster, ctx); err != nil {
@@ -187,6 +193,11 @@ func (h *Handler) AddTestV2(c *gin.Context) {
 	if !bindJSONOrAbort(c, &test) {
 		return
 	}
+	test.ID = strings.TrimSpace(test.ID)
+	if test.ID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
 
 	executeAndRespond(c, http.StatusCreated, func(ctx context.Context) (interface{}, error) {
 		if err := h.ds.AddTest(test, ctx); err != nil {
@@ -202,6 +213,11 @@ func (h *Handler) AddBuildV2(c *gin.Context) {
 	if !bindJSONOrAbort(c, &build) {
 		return
 	}
+	build.ID = strings.TrimSpace(build.ID)
+	if build.ID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
 
 	executeAndRespond(c, http.StatusCreated, func(ctx context.Context) (interface{}, error) {
 		if err := h.ds.AddBuild(build, ctx); err != nil {
@@ -215,6 +231,11 @@ func (h *Handler) AddBuildV2(c *gin.Context) {
 func (h *Handler) AddRunV2(c *gin.Context) {
 	var run models.RunDoc
 	if !bindJSONOrAbort(c, &run) {
+		return
+	}
+	run.ID = strings.TrimSpace(run.ID)
+	if run.ID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
 		return
 	}
 
