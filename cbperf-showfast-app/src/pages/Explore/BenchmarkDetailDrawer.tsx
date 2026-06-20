@@ -12,6 +12,8 @@ import {
 interface Props {
   detail: RunDetail | null;
   loading: boolean;
+  runId: string;
+  metricId: string;
   onClose: () => void;
 }
 
@@ -299,11 +301,11 @@ function RerunRow({
   );
 }
 
-export function BenchmarkDetailDrawer({ detail, loading, onClose }: Props) {
+export function BenchmarkDetailDrawer({ detail, loading, runId, metricId, onClose }: Props) {
   const styles = useStyles2(getStyles);
 
   return (
-    <Drawer title={`Benchmark Detail for build ${detail?.benchmark.build ?? ''}`} onClose={onClose} width={540}>
+    <Drawer title={`Benchmark Detail for build ${detail?.benchmark.build ?? ''}`} onClose={onClose} size="sm">
       {loading && (
         <div className={styles.spinnerCenter}>
           <Spinner size="xl" />
@@ -340,6 +342,31 @@ export function BenchmarkDetailDrawer({ detail, loading, onClose }: Props) {
             {detail.metric.chirality === 0 && (
               <span className={styles.chiralityNeutral}>↔ neutral</span>
             )}
+          </div>
+
+          {/* Links for the selected run */}
+          <div className={styles.linksRow}>
+            {detail.run.buildUrl && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon="external-link-alt"
+                onClick={() => window.open(detail.run.buildUrl, '_blank')}
+              >
+                Jenkins Build
+              </Button>
+            )}
+            {(detail.benchmark.snapshots ?? []).filter(Boolean).map((s, i) => (
+              <Button
+                key={s}
+                variant="secondary"
+                size="sm"
+                icon="external-link-alt"
+                onClick={() => window.open(formatSnapshotUrl(s), '_blank')}
+              >
+                CBMonitor {i + 1}
+              </Button>
+            ))}
           </div>
 
           {/* Metric */}
@@ -428,31 +455,38 @@ export function BenchmarkDetailDrawer({ detail, loading, onClose }: Props) {
             )}
           </Section>
 
-          {/* Links for the selected run */}
-          <Section title="Links">
-            <div className={styles.linksRow}>
-              {detail.run.buildUrl && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon="external-link-alt"
-                  onClick={() => window.open(detail.run.buildUrl, '_blank')}
-                >
-                  Jenkins Build
-                </Button>
-              )}
-              {(detail.benchmark.snapshots ?? []).filter(Boolean).map((s, i) => (
-                <Button
-                  key={s}
-                  variant="secondary"
-                  size="sm"
-                  icon="external-link-alt"
-                  onClick={() => window.open(formatSnapshotUrl(s), '_blank')}
-                >
-                  CBMonitor {i + 1}
-                </Button>
-              ))}
-            </div>
+          {/* Chirality & Thresholds diagnostics */}
+          <Section title="Chirality & Thresholds">
+            {(() => {
+              const chirality = detail.metric.chirality ?? 0;
+              const threshold = detail.test.threshold;
+              if (chirality === 0) {
+                return (
+                  <>
+                    <DetailRow label="Active" value="no — neutral metric, no regression direction" />
+                    <DetailRow label="Chirality" value="0" mono />
+                  </>
+                );
+              }
+              const yellowPct = threshold ?? 5;
+              const redPct = threshold != null ? threshold * 2 : 10;
+              const direction = chirality === -1
+                ? 'lower is better - high bars = regression (red)'
+                : 'higher is better - low bars = regression (red)';
+              const mode = threshold != null
+                ? `threshold-based (${threshold}% from DB)`
+                : 'median-based (no DB threshold set)';
+              return (
+                <>
+                  <DetailRow label="Active" value="yes" />
+                  <DetailRow label="Chirality" value={String(chirality)} mono />
+                  <DetailRow label="Direction" value={direction} />
+                  <DetailRow label="Mode" value={mode} />
+                  <DetailRow label="Yellow at" value={`±${yellowPct}% from median`} />
+                  <DetailRow label="Red at" value={`±${redPct}% from median`} />
+                </>
+              );
+            })()}
           </Section>
 
           {/* All reruns grouped by build */}
@@ -470,6 +504,15 @@ export function BenchmarkDetailDrawer({ detail, loading, onClose }: Props) {
               </div>
             </Section>
           )}
+
+          {/* Debug metadata — Couchbase document keys */}
+          <Section title="Debug Metadata">
+            <DetailRow label="run id" value={runId} mono />
+            <DetailRow label="metric id" value={metricId} mono />
+            {detail.test.testConfig && (
+              <DetailRow label="test config" value={detail.test.testConfig} mono />
+            )}
+          </Section>
         </div>
       )}
     </Drawer>

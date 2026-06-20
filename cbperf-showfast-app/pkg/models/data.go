@@ -87,6 +87,8 @@ type TimelinePanel struct {
 	ClusterInfo      *TimelineClusterInfo `json:"clusterInfo,omitempty"`
 	Tags             map[string]string    `json:"tags,omitempty"`
 	BenchmarksValues []TimelinePoint      `json:"benchmarksValues"`
+	Chirality        int                  `json:"chirality"`
+	Threshold        *float64             `json:"threshold,omitempty"`
 }
 
 type TimelineClusterInfo struct {

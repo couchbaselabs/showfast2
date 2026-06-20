@@ -1,4 +1,4 @@
-import { DataFrame, Field, FieldType, LoadingState, PanelData, dateTime } from '@grafana/data';
+import { DataFrame, Field, FieldColorModeId, FieldType, LoadingState, PanelData, ThresholdsMode, dateTime } from '@grafana/data';
 import { PanelBuilders, SceneDataNode, SceneFlexItem } from '@grafana/scenes';
 import { VizOrientation, VisibilityMode } from '@grafana/schema';
 import { TimelinePanel } from './timelinesApiTypes';
@@ -17,6 +17,43 @@ function formatSnapshotReportUrl(snapshotId: string): string {
   }
 
   return `https://cbmonitor2.sc.couchbase.com/a/cbmonitor/snapshots/${encodeURIComponent(snapshotId)}`;
+}
+
+function computeColorThresholds(
+  values: number[],
+  chirality: number,
+  thresholdPct: number | null | undefined
+) {
+  const yellowPct = (thresholdPct ?? 5) / 100;
+  const redPct = thresholdPct != null ? (thresholdPct * 2) / 100 : 0.1;
+
+  const sorted = [...values].sort((a, b) => a - b);
+  const baseline = sorted[Math.floor(sorted.length / 2)];
+  if (!baseline || chirality === 0) {
+    return null;
+  }
+
+  if (chirality > 0) {
+    // higher is better: low values = regression
+    return {
+      mode: ThresholdsMode.Absolute,
+      steps: [
+        { color: 'red', value: -Infinity },
+        { color: 'yellow', value: baseline * (1 - redPct) },
+        { color: 'green', value: baseline * (1 - yellowPct) },
+      ],
+    };
+  } else {
+    // lower is better: high values = regression
+    return {
+      mode: ThresholdsMode.Absolute,
+      steps: [
+        { color: 'green', value: -Infinity },
+        { color: 'yellow', value: baseline * (1 + yellowPct) },
+        { color: 'red', value: baseline * (1 + redPct) },
+      ],
+    };
+  }
 }
 
 function dynamicBarWidth(barCount: number): number {
@@ -39,6 +76,11 @@ function dynamicBarWidth(barCount: number): number {
 export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
   const points = panel.benchmarksValues ?? [];
   const barWidth = dynamicBarWidth(points.length);
+  const colorThresholds = computeColorThresholds(
+    points.map((p) => p.value),
+    panel.chirality,
+    panel.threshold
+  );
   const snapshotIds = points.map((p) => (p.snapshots ?? []).filter((value) => value.length > 0));
   const maxSnapshotCount = snapshotIds.reduce((maxCount, ids) => Math.max(maxCount, ids.length), 0);
   const snapshotLinks = Array.from({ length: maxSnapshotCount }, (_, index) => ({
@@ -123,7 +165,7 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
     },
   };
 
-  const vizPanel = PanelBuilders.barchart()
+  let builder = PanelBuilders.barchart()
     .setTitle(panel.title)
     .setDescription(clusterSubtitle(panel))
     .setData(new SceneDataNode({ data: panelData }))
@@ -155,7 +197,15 @@ export function buildBarChartPanelItem(panel: TimelinePanel): SceneFlexItem {
           legend: true,
         });
       }
-    })
+    });
+
+  if (colorThresholds) {
+    builder = builder
+      .setColor({ mode: FieldColorModeId.Thresholds })
+      .setThresholds(colorThresholds);
+  }
+
+  const vizPanel = builder
     .setOption('orientation', VizOrientation.Vertical)
     .setOption('xField', 'build')
     .setOption('xTickLabelRotation', 15)

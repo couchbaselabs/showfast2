@@ -29,6 +29,8 @@ export interface TimelinePanel {
   clusterInfo?: TimelineClusterInfo;
   tags?: Record<string, string>;
   benchmarksValues: TimelinePoint[];
+  chirality: number;
+  threshold?: number | null;
 }
 
 export interface TimelinePanelsQuery {

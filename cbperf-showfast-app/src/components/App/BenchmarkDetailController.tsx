@@ -93,7 +93,13 @@ export function BenchmarkDetailController({ children }: { children: React.ReactN
     <>
       {children}
       {detailState && (
-        <BenchmarkDetailDrawer detail={detailState.data} loading={loading} onClose={onClose} />
+        <BenchmarkDetailDrawer
+          detail={detailState.data}
+          loading={loading}
+          runId={detailState.runId}
+          metricId={detailState.metricId}
+          onClose={onClose}
+        />
       )}
     </>
   );

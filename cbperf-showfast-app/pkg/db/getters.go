@@ -107,7 +107,7 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 	//   idx_benchmarks_pipelinegroup_hidden so Couchbase does an index seek rather than scanning
 	//   all metrics and expanding their benchmarks before filtering.
 	selectClause := "SELECT m.id AS metricId, m.`title` AS title, m.component AS component, m.category AS category, "
-	selectClause += "m.subCategory AS subCategory, r.clusterId AS `cluster`, m.tags AS tags, "
+	selectClause += "m.subCategory AS subCategory, r.clusterId AS `cluster`, m.tags AS tags, m.chirality AS chirality, t.threshold AS threshold, "
 	selectClause += "{\"name\": c.name, \"os\": CASE WHEN c.os.distro IS NOT MISSING AND c.os.version IS NOT MISSING THEN c.os.distro || '-' || c.os.version WHEN c.os.distro IS NOT MISSING THEN c.os.distro ELSE TO_STRING(c.os) END, \"cpu\": c.cpu, \"disk\": c.disk, \"memory\": c.memory} AS clusterInfo, "
 	selectClause += "b.`build` AS `build`, b.`value` AS `value`, r.`buildURL` AS `buildUrl`, b.`snapshots` AS snapshots, b.runId AS runId "
 
@@ -117,13 +117,15 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 		fromClause = "FROM " + benchmarksKeyspace + " b " +
 			"JOIN " + metricsKeyspace + " m ON KEYS b.metric " +
 			"JOIN " + runsKeyspace + " r ON KEYS b.runId " +
-			"JOIN " + clustersKeyspace + " c ON KEYS r.clusterId "
+			"JOIN " + clustersKeyspace + " c ON KEYS r.clusterId " +
+			"LEFT JOIN " + testsKeyspace + " t ON KEYS r.testId "
 	} else {
 		// Metric-side filters present: drive from metrics for index efficiency.
 		fromClause = "FROM " + metricsKeyspace + " m " +
 			"JOIN " + benchmarksKeyspace + " b ON KEY b.metric FOR m " +
 			"JOIN " + runsKeyspace + " r ON KEYS b.runId " +
-			"JOIN " + clustersKeyspace + " c ON KEYS r.clusterId "
+			"JOIN " + clustersKeyspace + " c ON KEYS r.clusterId " +
+			"LEFT JOIN " + testsKeyspace + " t ON KEYS r.testId "
 	}
 
 	query := selectClause + fromClause
