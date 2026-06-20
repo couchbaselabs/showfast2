@@ -8,6 +8,7 @@ import { searchPage } from '../../pages/Search/searchPage';
 import { timelinesPage } from '../../pages/Timelines/timelinesPage';
 import { weeklyPage } from '../../pages/Weekly/weeklyPage';
 import { BenchmarkDetailController } from './BenchmarkDetailController';
+import { AppNavHeader } from '../AppNavHeader';
 
 function getSceneApp() {
   return new SceneApp({
@@ -23,7 +24,12 @@ function getSceneApp() {
 function AppWithScenes() {
   const scene = useSceneApp(getSceneApp);
 
-  return <scene.Component model={scene} />;
+  return (
+    <>
+      <AppNavHeader />
+      <scene.Component model={scene} />
+    </>
+  );
 }
 
 function App(props: AppRootProps) {

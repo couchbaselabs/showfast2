@@ -134,5 +134,7 @@ export function exploreScene(): EmbeddedScene {
     ],
   });
 
-  return new EmbeddedScene({ body });
+  return new EmbeddedScene({
+    body,
+  });
 }
