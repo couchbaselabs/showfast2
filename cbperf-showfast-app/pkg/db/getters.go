@@ -504,3 +504,77 @@ func (ds *DataStore) GetClusterInfo(clusterID string, c context.Context) (*model
 	}
 	return &results[0], nil
 }
+
+// GetSingleMetricPanel returns the full TimelinePanel for one metric with optional
+// serverMajorMinor and showHiddenBenchmarks filters.
+func (ds *DataStore) GetSingleMetricPanel(metricID string, filters *FilterOptions, c context.Context) (*models.TimelinePanel, error) {
+	type panelRow struct {
+		models.TimelinePanel
+		Build     string   `json:"build"`
+		Value     float64  `json:"value"`
+		BuildURL  string   `json:"buildUrl"`
+		Snapshots []string `json:"snapshots"`
+		RunID     string   `json:"runId"`
+	}
+
+	selectClause := "SELECT m.id AS metricId, m.`title` AS title, m.component AS component, m.category AS category, " +
+		"m.subCategory AS subCategory, r.clusterId AS `cluster`, m.tags AS tags, m.chirality AS chirality, t.threshold AS threshold, " +
+		`{"name": c.name, "os": CASE WHEN c.os.distro IS NOT MISSING AND c.os.version IS NOT MISSING THEN c.os.distro || '-' || c.os.version WHEN c.os.distro IS NOT MISSING THEN c.os.distro ELSE TO_STRING(c.os) END, "cpu": c.cpu, "disk": c.disk, "memory": c.memory} AS clusterInfo, ` +
+		"b.`build` AS `build`, b.`value` AS `value`, r.`buildURL` AS buildUrl, b.snapshots AS snapshots, b.runId AS runId "
+
+	fromClause := "FROM " + benchmarksKeyspace + " b " +
+		"JOIN " + metricsKeyspace + " m ON KEYS b.metric " +
+		"JOIN " + runsKeyspace + " r ON KEYS b.runId " +
+		"JOIN " + clustersKeyspace + " c ON KEYS r.clusterId " +
+		"LEFT JOIN " + testsKeyspace + " t ON KEYS r.testId "
+
+	whereClauses := []string{"b.metric = $metricId", "r.status = 'completed'"}
+	if !filters.ShowHiddenBenchmarks {
+		whereClauses = append(whereClauses, "b.hidden = False")
+	}
+	if !filters.ShowHiddenMetrics {
+		whereClauses = append(whereClauses, "m.hidden = False")
+	}
+
+	params := map[string]interface{}{"metricId": metricID}
+	query := selectClause + fromClause + "WHERE " + strings.Join(whereClauses, " AND ")
+
+	if len(filters.ServerMajorMinors) > 0 {
+		quoted := make([]string, len(filters.ServerMajorMinors))
+		for i, v := range filters.ServerMajorMinors {
+			quoted[i] = `"` + v + `"`
+		}
+		query += " AND b.serverMajorMinor IN [" + strings.Join(quoted, ",") + "]"
+	}
+
+	rows, err := queryRows[panelRow](ds.cluster, query, params, "single-metric-panel", c)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+
+	panel := &rows[0].TimelinePanel
+	panel.BenchmarksValues = make([]models.TimelinePoint, 0, len(rows))
+	for _, r := range rows {
+		panel.BenchmarksValues = append(panel.BenchmarksValues, models.TimelinePoint{
+			Build:     r.Build,
+			Value:     r.Value,
+			BuildURL:  r.BuildURL,
+			Snapshots: r.Snapshots,
+			RunID:     r.RunID,
+		})
+	}
+
+	buildParseCache := make(map[string]semanticBuildParse)
+	sort.SliceStable(panel.BenchmarksValues, func(i, j int) bool {
+		return compareSemanticBuildCached(
+			panel.BenchmarksValues[i].Build,
+			panel.BenchmarksValues[j].Build,
+			buildParseCache,
+		) < 0
+	})
+
+	return panel, nil
+}

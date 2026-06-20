@@ -53,6 +53,25 @@ func (h *Handler) GetTimelineV2(c *gin.Context) {
 	})
 }
 
+func (h *Handler) GetSingleMetricPanelV2(c *gin.Context) {
+	metricID := c.Param("metricId")
+	if metricID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "metricId parameter is required"})
+		return
+	}
+	filters := parseFilterOptions(c)
+	executeAndRespond(c, http.StatusOK, func(ctx context.Context) (interface{}, error) {
+		panel, err := h.ds.GetSingleMetricPanel(metricID, &filters, ctx)
+		if err != nil {
+			return nil, err
+		}
+		if panel == nil {
+			return models.TimelinePanel{BenchmarksValues: []models.TimelinePoint{}}, nil
+		}
+		return panel, nil
+	})
+}
+
 func (h *Handler) GetTimelinePanelsV2(c *gin.Context) {
 	filters := parseFilterOptions(c)
 	limitStr := c.Query("limit")

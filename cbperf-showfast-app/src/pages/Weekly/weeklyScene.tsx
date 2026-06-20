@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { EmbeddedScene, SceneFlexItem, SceneFlexLayout, SceneReactObject } from '@grafana/scenes';
 import { LinkButton, LoadingPlaceholder, useTheme2 } from '@grafana/ui';
 import { getBackendSrv, locationService } from '@grafana/runtime';
 import { API_BASE_URL, ROUTES } from '../../constants';
 import { prefixRoute } from '../../utils/utils.routing';
+import { buildBarChartPanelItem } from '../Timelines/timelinesPanelBuilder';
+import { TimelinePanel } from '../Timelines/timelinesApiTypes';
 
 // ── API types ─────────────────────────────────────────────────────────────────
 
@@ -105,17 +107,131 @@ function formatValue(value: number): string {
   return value.toFixed(2);
 }
 
+// ── Inline metric timeline ────────────────────────────────────────────────────
+
+async function fetchSingleMetricPanel(
+  metricId: string,
+  majorMinor: string | null,
+  showHidden: boolean
+): Promise<TimelinePanel | null> {
+  const params = new URLSearchParams();
+  if (majorMinor) {
+    params.set('serverMajorMinor', majorMinor);
+  }
+  if (showHidden) {
+    params.set('showHiddenBenchmarks', 'true');
+  }
+  const qs = params.toString();
+  const url = `${API_BASE_URL}/timelines/panel/${encodeURIComponent(metricId)}${qs ? '?' + qs : ''}`;
+  return getBackendSrv().get<TimelinePanel | null>(url);
+}
+
+function extractMajorMinor(build: string): string {
+  const m = build.match(/^(\d+\.\d+)/);
+  return m ? m[1] : '';
+}
+
+function MetricChart({ panel }: { panel: TimelinePanel }) {
+  const scene = useMemo(
+    () =>
+      new EmbeddedScene({
+        body: new SceneFlexLayout({
+          direction: 'column',
+          children: [buildBarChartPanelItem(panel)],
+        }),
+      }),
+    [] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  return (
+    <div style={{ height: 380, display: 'flex', flexDirection: 'column' }}>
+      <scene.Component model={scene} />
+    </div>
+  );
+}
+
+function MetricTimeline({ metricId, currentBuild }: { metricId: string; currentBuild: string }) {
+  const theme = useTheme2();
+  const currentMajorMinor = extractMajorMinor(currentBuild);
+  const [focusCurrent, setFocusCurrent] = useState(false);
+  const [panel, setPanel] = useState<TimelinePanel | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(false);
+    const mm = focusCurrent && currentMajorMinor ? currentMajorMinor : null;
+    fetchSingleMetricPanel(metricId, mm, focusCurrent)
+      .then((p) => {
+        if (!active) {
+          return;
+        }
+        setPanel(p);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (active) {
+          setError(true);
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [metricId, focusCurrent, currentMajorMinor]);
+
+  return (
+    <div
+      style={{
+        padding: theme.spacing(2),
+        background: theme.colors.background.canvas,
+        borderTop: `1px solid ${theme.colors.border.weak}`,
+      }}
+    >
+      <label
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: theme.spacing(0.75),
+          fontSize: 12,
+          color: theme.colors.text.secondary,
+          cursor: 'pointer',
+          marginBottom: theme.spacing(1.5),
+        }}
+      >
+        <input type="checkbox" checked={focusCurrent} onChange={(e) => setFocusCurrent(e.target.checked)} />
+        {currentMajorMinor ? `Focus on ${currentMajorMinor} · include hidden` : 'Include hidden benchmarks'}
+      </label>
+
+      {loading && <LoadingPlaceholder text="Loading timeline…" />}
+      {error && (
+        <div style={{ color: theme.colors.error.text, fontSize: 13 }}>Failed to load timeline data.</div>
+      )}
+      {!loading && !error && !panel && (
+        <div style={{ color: theme.colors.text.secondary, fontSize: 13 }}>No benchmark data found.</div>
+      )}
+      {!loading && !error && panel && (
+        <MetricChart key={`${panel.metricId}-${focusCurrent}`} panel={panel} />
+      )}
+    </div>
+  );
+}
+
 // ── Component section ─────────────────────────────────────────────────────────
 
 function ComponentSection({
   detail,
-  timelinesBase,
+  currentBuild,
   theme,
 }: {
   detail: WeeklyComponentDetail;
-  timelinesBase: string;
+  currentBuild: string;
   theme: ReturnType<typeof useTheme2>;
 }) {
+  const [expandedMetricId, setExpandedMetricId] = useState<string | null>(null);
+
   const hasRegression = detail.metrics.some((m) => m.status === 'regressed');
   const hasWarning = detail.metrics.some((m) => m.status === 'warning');
   const headerColor = hasRegression
@@ -139,6 +255,18 @@ function ComponentSection({
     letterSpacing: 0.5,
     color: theme.colors.text.secondary,
     background: theme.colors.background.canvas,
+  };
+
+  const actionLinkStyle: React.CSSProperties = {
+    fontSize: 12,
+    color: theme.colors.text.link,
+    textDecoration: 'none',
+    border: `1px solid ${theme.colors.border.medium}`,
+    borderRadius: theme.shape.radius.default,
+    padding: `2px ${theme.spacing(0.75)}`,
+    whiteSpace: 'nowrap',
+    background: 'none',
+    cursor: 'pointer',
   };
 
   return (
@@ -186,68 +314,66 @@ function ComponentSection({
           <tbody>
             {detail.metrics.map((m) => {
               const color = statusColor(m.status, theme);
+              const isExpanded = expandedMetricId === m.metricId;
               return (
-                <tr key={m.metricId}>
-                  <td style={cellStyle}>
-                    <span style={{ color, fontWeight: 600, fontSize: 12 }}>{statusLabel(m.status)}</span>
-                  </td>
-                  <td style={cellStyle}>
-                    <div style={{ fontWeight: 500 }}>{m.title}</div>
-                    {m.subCategory && (
-                      <div style={{ fontSize: 11, color: theme.colors.text.secondary }}>{m.subCategory}</div>
-                    )}
-                  </td>
-                  <td style={{ ...cellStyle, color: theme.colors.text.secondary, fontSize: 12 }}>{m.category}</td>
-                  <td style={{ ...cellStyle, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color }}>
-                    {formatValue(m.value)}
-                  </td>
-                  <td
-                    style={{
-                      ...cellStyle,
-                      textAlign: 'right',
-                      fontFamily: 'monospace',
-                      color: theme.colors.text.secondary,
-                    }}
-                  >
-                    {m.baseline > 0 ? formatValue(m.baseline) : '—'}
-                  </td>
-                  <td style={cellStyle}>
-                    <div style={{ display: 'flex', gap: theme.spacing(0.75), flexWrap: 'wrap' }}>
-                      {m.buildUrl && (
-                        <a
-                          href={m.buildUrl}
-                          target="_blank"
-                          rel="noreferrer"
+                <React.Fragment key={m.metricId}>
+                  <tr>
+                    <td style={cellStyle}>
+                      <span style={{ color, fontWeight: 600, fontSize: 12 }}>{statusLabel(m.status)}</span>
+                    </td>
+                    <td style={cellStyle}>
+                      <div style={{ fontWeight: 500 }}>{m.title}</div>
+                      {m.subCategory && (
+                        <div style={{ fontSize: 11, color: theme.colors.text.secondary }}>{m.subCategory}</div>
+                      )}
+                    </td>
+                    <td style={{ ...cellStyle, color: theme.colors.text.secondary, fontSize: 12 }}>{m.category}</td>
+                    <td style={{ ...cellStyle, textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color }}>
+                      {formatValue(m.value)}
+                    </td>
+                    <td
+                      style={{
+                        ...cellStyle,
+                        textAlign: 'right',
+                        fontFamily: 'monospace',
+                        color: theme.colors.text.secondary,
+                      }}
+                    >
+                      {m.baseline > 0 ? formatValue(m.baseline) : '—'}
+                    </td>
+                    <td style={cellStyle}>
+                      <div style={{ display: 'flex', gap: theme.spacing(0.75), flexWrap: 'wrap' }}>
+                        {m.buildUrl && (
+                          <a
+                            href={m.buildUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={actionLinkStyle}
+                          >
+                            Jenkins
+                          </a>
+                        )}
+                        <button
+                          onClick={() => setExpandedMetricId(isExpanded ? null : m.metricId)}
                           style={{
-                            fontSize: 12,
-                            color: theme.colors.text.link,
-                            textDecoration: 'none',
-                            border: `1px solid ${theme.colors.border.medium}`,
-                            borderRadius: theme.shape.radius.default,
-                            padding: `2px ${theme.spacing(0.75)}`,
-                            whiteSpace: 'nowrap',
+                            ...actionLinkStyle,
+                            color: isExpanded ? theme.colors.text.primary : theme.colors.text.link,
+                            fontWeight: isExpanded ? 600 : 400,
                           }}
                         >
-                          Jenkins
-                        </a>
-                      )}
-                      <a
-                        href={`${timelinesBase}?var-component=${encodeURIComponent(m.component)}`}
-                        style={{
-                          fontSize: 12,
-                          color: theme.colors.text.link,
-                          textDecoration: 'none',
-                          border: `1px solid ${theme.colors.border.medium}`,
-                          borderRadius: theme.shape.radius.default,
-                          padding: `2px ${theme.spacing(0.75)}`,
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        Timelines
-                      </a>
-                    </div>
-                  </td>
-                </tr>
+                          {isExpanded ? 'Close' : 'View'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: 0 }}>
+                        <MetricTimeline metricId={m.metricId} currentBuild={currentBuild} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -261,7 +387,7 @@ function ComponentSection({
 
 function WeeklyContent({ initialBuild }: { initialBuild?: string }) {
   const theme = useTheme2();
-  const timelinesBase = prefixRoute(ROUTES.Timelines);
+
 
   // Initialise from module-level cache so that returning to a build or navigating to
   // a pre-fetched build shows content immediately without a loading flash.
@@ -461,7 +587,7 @@ function WeeklyContent({ initialBuild }: { initialBuild?: string }) {
       {detail &&
         !detailLoading &&
         detail.components.map((c) => (
-          <ComponentSection key={c.component} detail={c} timelinesBase={timelinesBase} theme={theme} />
+          <ComponentSection key={c.component} detail={c} currentBuild={initialBuild ?? ''} theme={theme} />
         ))}
     </div>
   );
