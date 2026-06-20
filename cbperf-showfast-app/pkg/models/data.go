@@ -250,6 +250,16 @@ type WeeklyDoc struct {
 	Components  []ComponentStatus `json:"components"`
 }
 
+// WeeklyComponentDetailDoc stores the full per-metric results for one component+build.
+// Key: "weekly-detail::<build>::<component>". Generated alongside WeeklyDoc.
+type WeeklyComponentDetailDoc struct {
+	Build       string               `json:"build"`
+	Date        string               `json:"date"`
+	Component   string               `json:"component"`
+	GeneratedAt string               `json:"generatedAt"`
+	Metrics     []WeeklyMetricResult `json:"metrics"`
+}
+
 // PipelineDoc mirrors a document in showfast.management.pipelines.
 type PipelineDoc struct {
 	Build  string `json:"build"`

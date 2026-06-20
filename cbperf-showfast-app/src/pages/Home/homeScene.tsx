@@ -1,31 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { EmbeddedScene, SceneFlexItem, SceneFlexLayout, SceneReactObject } from '@grafana/scenes';
-import { LinkButton, LoadingPlaceholder, Stack, Tab, TabsBar, useTheme2 } from '@grafana/ui';
-import { ROUTES } from '../../constants';
-import { prefixRoute } from '../../utils/utils.routing';
+import { LoadingPlaceholder, Stack, Tab, TabsBar, useTheme2 } from '@grafana/ui';
 import { fetchSummaryEndpoint } from './summaryDashboardData';
 import { ComponentCard } from './ComponentCard';
 import { JenkinsRun, JenkinsRunsResponse, PipelineSummary, PipelineSummaryResponse } from './homeApiTypes';
 import { weeklyBuildUrl } from '../Weekly/weeklyScene';
-
-type LinkItem = {
-  title: string;
-  href: string;
-  description: string;
-};
-
-const coreLinks: LinkItem[] = [
-  {
-    title: 'Timelines',
-    href: prefixRoute(ROUTES.Timelines),
-    description: 'Explore benchmark trends over time with filterable variables.',
-  },
-  {
-    title: 'Search',
-    href: prefixRoute(ROUTES.Search),
-    description: 'Search across Showfast records and jump into specific results.',
-  },
-];
 
 type TabId = 'today' | 'week' | 'jenkins';
 
@@ -374,36 +353,6 @@ function LandingContent() {
     >
       <Stack direction="column" gap={4}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: theme.spacing(2) }}>Start here</div>
-          <Stack direction="row" wrap={true} gap={2}>
-            {coreLinks.map((item) => (
-              <div
-                key={item.title}
-                style={{
-                  flex: '1 1 280px',
-                  minWidth: 280,
-                  padding: theme.spacing(3),
-                  borderRadius: theme.shape.radius.default,
-                  border: `1px solid ${theme.colors.border.weak}`,
-                  background: theme.colors.background.primary,
-                }}
-              >
-                <Stack direction="column" gap={1}>
-                  <div style={{ fontSize: 18, fontWeight: 600 }}>{item.title}</div>
-                  <div style={{ color: theme.colors.text.secondary, lineHeight: 1.5 }}>{item.description}</div>
-                  <div>
-                    <LinkButton href={item.href} icon="arrow-right" variant="primary">
-                      Open {item.title}
-                    </LinkButton>
-                  </div>
-                </Stack>
-              </div>
-            ))}
-          </Stack>
-        </div>
-
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: theme.spacing(2) }}>Pipeline summary</div>
           <div
             style={{
               padding: theme.spacing(3),

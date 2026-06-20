@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/cbperf/showfast/pkg/models"
+	"github.com/couchbase/gocb/v2"
 )
 
 func (ds *DataStore) GetWeeklyBuilds(ctx context.Context) (*models.WeeklyBuildsResponse, error) {
@@ -40,6 +41,74 @@ func (ds *DataStore) GetWeeklyBuilds(ctx context.Context) (*models.WeeklyBuildsR
 }
 
 func (ds *DataStore) GetWeeklyDetail(ctx context.Context, build string) (*models.WeeklyDetailResponse, error) {
+	// Fast path: read precomputed docs written by GenerateWeeklyDocs.
+	if resp := ds.weeklyDetailFromDocs(ctx, build); resp != nil {
+		return resp, nil
+	}
+
+	// Slow path: live computation (used when generate has not been run yet).
+	return ds.weeklyDetailLive(ctx, build)
+}
+
+// weeklyDetailFromDocs reads the precomputed summary + per-component detail docs.
+// Component docs are fetched concurrently. Returns nil if any doc is absent or
+// unreadable (caller falls back to live computation).
+func (ds *DataStore) weeklyDetailFromDocs(ctx context.Context, build string) *models.WeeklyDetailResponse {
+	weeklyCol := ds.cluster.Bucket("showfast").Scope("management").Collection("weekly")
+
+	var summaryDoc models.WeeklyDoc
+	res, err := weeklyCol.Get("weekly::"+build, &gocb.GetOptions{Context: ctx})
+	if err != nil || res.Content(&summaryDoc) != nil || len(summaryDoc.Components) == 0 {
+		return nil
+	}
+
+	type fetchResult struct {
+		idx    int
+		detail models.WeeklyComponentDetail
+		err    error
+	}
+
+	n := len(summaryDoc.Components)
+	ch := make(chan fetchResult, n)
+	for i, cs := range summaryDoc.Components {
+		go func(i int, component string) {
+			key := "weekly-detail::" + build + "::" + component
+			r, err := weeklyCol.Get(key, &gocb.GetOptions{Context: ctx})
+			if err != nil {
+				ch <- fetchResult{idx: i, err: err}
+				return
+			}
+			var doc models.WeeklyComponentDetailDoc
+			if err := r.Content(&doc); err != nil {
+				ch <- fetchResult{idx: i, err: err}
+				return
+			}
+			ch <- fetchResult{idx: i, detail: models.WeeklyComponentDetail{
+				Component: doc.Component,
+				Metrics:   doc.Metrics,
+			}}
+		}(i, cs.Component)
+	}
+
+	components := make([]models.WeeklyComponentDetail, n)
+	for range summaryDoc.Components {
+		r := <-ch
+		if r.err != nil {
+			return nil // missing or unreadable doc — fall back to live
+		}
+		components[r.idx] = r.detail
+	}
+
+	return &models.WeeklyDetailResponse{
+		Build:      build,
+		Date:       summaryDoc.Date,
+		Components: components,
+	}
+}
+
+// weeklyDetailLive computes the weekly detail on the fly via N1QL.
+// This is the original implementation, preserved as a fallback.
+func (ds *DataStore) weeklyDetailLive(ctx context.Context, build string) (*models.WeeklyDetailResponse, error) {
 	type runRow struct {
 		MetricID    string   `json:"metricId"`
 		Value       float64  `json:"value"`
@@ -89,7 +158,6 @@ func (ds *DataStore) GetWeeklyDetail(ctx context.Context, build string) (*models
 	}
 
 	if len(deduped) == 0 {
-		// Find date from pipeline doc.
 		date := weeklyBuildDate(ds, ctx, build)
 		return &models.WeeklyDetailResponse{
 			Build:      build,
@@ -98,7 +166,6 @@ func (ds *DataStore) GetWeeklyDetail(ctx context.Context, build string) (*models
 		}, nil
 	}
 
-	// Batch baseline medians for all metricIds, excluding this build.
 	metricIds := make([]string, 0, len(deduped))
 	for _, r := range deduped {
 		metricIds = append(metricIds, `"`+r.MetricID+`"`)
@@ -130,7 +197,6 @@ func (ds *DataStore) GetWeeklyDetail(ctx context.Context, build string) (*models
 		baselineMap[b.MetricID] = b.Baseline
 	}
 
-	// Build per-component metric groups.
 	compMap := make(map[string][]models.WeeklyMetricResult)
 	for _, r := range deduped {
 		baseline := baselineMap[r.MetricID]
@@ -150,7 +216,6 @@ func (ds *DataStore) GetWeeklyDetail(ctx context.Context, build string) (*models
 		})
 	}
 
-	// Sort metrics within each component: regressed → warning → passed → neutral, then by title.
 	statusRank := map[string]int{"regressed": 0, "warning": 1, "passed": 2, "neutral": 3}
 	components := make([]models.WeeklyComponentDetail, 0, len(compMap))
 	for comp, metrics := range compMap {
