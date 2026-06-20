@@ -32,6 +32,8 @@ const (
 	runsKeyspace        = "`showfast`.`showfast`.`runs`"
 	testsKeyspace       = "`showfast`.`showfast`.`tests`"
 	buildsKeyspace      = "`showfast`.`showfast`.`builds`"
+	pipelinesKeyspace        = "`showfast`.`management`.`pipelines`"
+	weeklyManagementKeyspace = "`showfast`.`management`.`weekly`"
 )
 
 var couchbaseCollections = []string{"benchmarks", "metrics", "clusters", "runs", "tests", "builds"}

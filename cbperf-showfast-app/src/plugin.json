@@ -37,15 +37,15 @@
     },
     {
       "type": "page",
-      "name": "Metrics Explore",
-      "path": "/a/%PLUGIN_ID%/metrics-explore",
+      "name": "Weekly",
+      "path": "/a/%PLUGIN_ID%/weekly",
       "addToNav": true,
       "defaultNav": false
     },
     {
       "type": "page",
-      "name": "Search",
-      "path": "/a/%PLUGIN_ID%/search",
+      "name": "Metrics Explore",
+      "path": "/a/%PLUGIN_ID%/metrics-explore",
       "addToNav": true,
       "defaultNav": false
     }

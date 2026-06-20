@@ -48,10 +48,20 @@ func SetupRouter(ds *db.DataStore) *gin.Engine {
 		filters.POST("/reload", h.ReloadFiltersV2)
 	}
 
+	weekly := router.Group("/weekly")
+	{
+		weekly.GET("/builds", h.GetWeeklyBuildsV2)
+		weekly.GET("/detail", h.GetWeeklyDetailV2)
+	}
+
 	summary := router.Group("/summary")
 	{
 		summary.GET("/tests-ran-last-month", h.GetTestsRanLastMonthSummaryV2)
 		summary.GET("/tests-ran-for-each-component-last-2-weeks", h.GetTestsRanForEachComponentLast2WeeksV2)
+		summary.GET("/daily-component-status", h.GetDailyComponentStatusV2)
+		summary.GET("/weekly-component-status", h.GetWeeklyComponentStatusV2)
+		summary.GET("/jenkins-runs", h.GetJenkinsRunsV2)
+		summary.POST("/generate-weekly", h.GenerateWeeklyDocsV2)
 	}
 
 	return router

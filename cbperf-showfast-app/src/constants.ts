@@ -8,6 +8,7 @@ export const ROUTES = {
   Timelines: 'timelines',
   MetricsExplore: 'metrics-explore',
   Search: 'search',
+  Weekly: 'weekly',
 }
 
 export const DATASOURCE_REF = {

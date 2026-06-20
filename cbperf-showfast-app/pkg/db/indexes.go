@@ -54,6 +54,32 @@ var requiredIndexes = []requiredIndex{
 		name:     "idx_benchmarks_pipelinegroup_hidden",
 		fields:   "pipelineGroup, hidden",
 	},
+
+	// ── management.pipelines ──────────────────────────────────────────────────
+	{
+		// Covers GetWeeklyBuilds (WHERE type="weekly" ORDER BY date DESC) and
+		// weeklyBuildDate (WHERE type="weekly" AND build=$build).
+		keyspace: pipelinesKeyspace,
+		name:     "idx_pipelines_type_date",
+		fields:   "`type`, `date` DESC",
+	},
+	{
+		// Covers getPipelineSummary / GenerateWeeklyDocs
+		// (WHERE active=true AND type=...).
+		keyspace: pipelinesKeyspace,
+		name:     "idx_pipelines_active_type",
+		fields:   "active, `type`",
+	},
+
+	// ── management.weekly ────────────────────────────────────────────────────
+	{
+		// Covers the WHERE build IN (...) scan in GetWeeklyPipelineSummary
+		// and componentStatusForBuilds. The collection uses "weekly::<build>"
+		// as the document key, but queries filter on the body field `build`.
+		keyspace: weeklyManagementKeyspace,
+		name:     "idx_weekly_build",
+		fields:   "`build`",
+	},
 }
 
 // EnsureIndexes creates required indexes if they do not already exist.
