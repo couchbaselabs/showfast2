@@ -38,8 +38,9 @@ func (h *Handler) GetWeeklyComponentStatusV2(c *gin.Context) {
 }
 
 func (h *Handler) GenerateWeeklyDocsV2(c *gin.Context) {
+	build := c.Query("build")
 	executeAndRespond(c, http.StatusOK, func(ctx context.Context) (interface{}, error) {
-		return h.ds.GenerateWeeklyDocs(ctx)
+		return h.ds.GenerateWeeklyDocs(ctx, build)
 	})
 }
 

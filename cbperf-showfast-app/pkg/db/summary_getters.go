@@ -53,6 +53,25 @@ func (ds *DataStore) getActivePipelines(ctx context.Context, pipelineType string
 	return queryRows[models.PipelineDoc](ds.cluster, query, nil, "active-pipelines query", ctx)
 }
 
+// getPipelineByBuild fetches a single pipeline doc matching the given build and type,
+// regardless of its active status.
+func (ds *DataStore) getPipelineByBuild(ctx context.Context, build, pipelineType string) (*models.PipelineDoc, error) {
+	query := `
+		SELECT p.` + "`build`" + `, p.` + "`type`" + `, p.` + "`date`" + `, p.active
+		FROM ` + pipelinesKeyspace + ` p
+		WHERE p.` + "`build`" + ` = $build AND p.` + "`type`" + ` = $type
+		LIMIT 1
+	`
+	rows, err := queryRows[models.PipelineDoc](ds.cluster, query, map[string]interface{}{"build": build, "type": pipelineType}, "pipeline-by-build query", ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return &rows[0], nil
+}
+
 // componentStatusForBuilds returns per-component pass/warn/regressed counts
 // for the given set of builds. Baselines are derived from the last 30 days
 // of historical runs, excluding the pipeline builds themselves.
@@ -435,16 +454,32 @@ func (ds *DataStore) generateWeeklyDetailForBuilds(
 	return detailByBuild, statusByBuild, nil
 }
 
-// GenerateWeeklyDocs computes per-component threshold status for every active weekly
-// pipeline build and upserts the results into management.weekly. Writes:
+// GenerateWeeklyDocs computes per-component threshold status and upserts docs into
+// management.weekly. Writes:
 //   - "weekly::<build>"                    — summary counts per component
 //   - "weekly-detail::<build>::<component>" — full metric list per component
 //
+// When build is non-empty only that specific build is (re)generated, regardless of
+// its active status. When build is empty all active weekly pipeline builds are processed.
 // Returns the generated summaries so the caller can confirm what was written.
-func (ds *DataStore) GenerateWeeklyDocs(ctx context.Context) (*models.PipelineSummaryResponse, error) {
-	pipelines, err := ds.getActivePipelines(ctx, "weekly")
-	if err != nil {
-		return nil, err
+func (ds *DataStore) GenerateWeeklyDocs(ctx context.Context, build string) (*models.PipelineSummaryResponse, error) {
+	var pipelines []models.PipelineDoc
+
+	if build != "" {
+		p, err := ds.getPipelineByBuild(ctx, build, "weekly")
+		if err != nil {
+			return nil, err
+		}
+		if p == nil {
+			return nil, fmt.Errorf("no weekly pipeline found for build %q", build)
+		}
+		pipelines = []models.PipelineDoc{*p}
+	} else {
+		var err error
+		pipelines, err = ds.getActivePipelines(ctx, "weekly")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if len(pipelines) == 0 {
