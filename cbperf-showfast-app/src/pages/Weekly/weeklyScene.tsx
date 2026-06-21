@@ -38,6 +38,7 @@ interface WeeklyDetailResponse {
   build: string;
   date: string;
   components: WeeklyComponentDetail[];
+  tickets?: Record<string, string[]>;
 }
 
 // ── Module-level caches ───────────────────────────────────────────────────────
@@ -92,6 +93,46 @@ function statusLabel(status: string) {
     default:
       return 'Neutral';
   }
+}
+
+function ticketId(url: string): string {
+  return url.split('/').pop() ?? url;
+}
+
+function TicketLinks({
+  urls,
+  theme,
+}: {
+  urls: string[];
+  theme: ReturnType<typeof useTheme2>;
+}) {
+  if (urls.length === 0) {
+    return null;
+  }
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: theme.spacing(0.5) }}>
+      {urls.map((url) => (
+        <a
+          key={url}
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            fontSize: 12,
+            color: theme.colors.text.link,
+            textDecoration: 'none',
+            border: `1px solid ${theme.colors.border.medium}`,
+            borderRadius: theme.shape.radius.default,
+            padding: `2px ${theme.spacing(0.75)}`,
+            whiteSpace: 'nowrap',
+            fontFamily: 'monospace',
+          }}
+        >
+          {ticketId(url)}
+        </a>
+      ))}
+    </div>
+  );
 }
 
 function formatValue(value: number): string {
@@ -379,6 +420,7 @@ function ComponentSection({
           </tbody>
         </table>
       </div>
+
     </div>
   );
 }
@@ -489,6 +531,8 @@ function WeeklyContent({ initialBuild }: { initialBuild?: string }) {
     detail?.components.reduce((sum, c) => sum + c.metrics.filter((m) => m.status === 'warning').length, 0) ?? 0;
   const totalPassed =
     detail?.components.reduce((sum, c) => sum + c.metrics.filter((m) => m.status === 'passed').length, 0) ?? 0;
+  const totalNeutral =
+    detail?.components.reduce((sum, c) => sum + c.metrics.filter((m) => m.status === 'neutral').length, 0) ?? 0;
 
   const canGoOlder = !buildsLoading && buildIndex >= 0 && buildIndex < allBuilds.length - 1;
   const canGoNewer = !buildsLoading && buildIndex > 0;
@@ -530,8 +574,8 @@ function WeeklyContent({ initialBuild }: { initialBuild?: string }) {
           />
         </div>
 
-        {detail && !detailLoading && (
-          <div style={{ display: 'flex', gap: theme.spacing(2), flexWrap: 'wrap' }}>
+        {detail && !detailLoading && (totalRegressed + totalWarning + totalPassed + totalNeutral > 0) && (
+          <div style={{ display: 'flex', gap: theme.spacing(2), flexWrap: 'wrap', alignItems: 'center' }}>
             {totalRegressed > 0 && (
               <span style={{ fontSize: 13, color: theme.colors.error.text, fontWeight: 600 }}>
                 ✗ {totalRegressed} regressed
@@ -544,6 +588,9 @@ function WeeklyContent({ initialBuild }: { initialBuild?: string }) {
             )}
             {totalPassed > 0 && (
               <span style={{ fontSize: 13, color: theme.colors.success.text }}>✓ {totalPassed} passed</span>
+            )}
+            {totalNeutral > 0 && (
+              <span style={{ fontSize: 13, color: theme.colors.text.disabled }}>— {totalNeutral} neutral</span>
             )}
           </div>
         )}
@@ -575,6 +622,43 @@ function WeeklyContent({ initialBuild }: { initialBuild?: string }) {
       {detailError && (
         <div style={{ color: theme.colors.error.text, padding: theme.spacing(2) }}>
           Failed to load detail for this build.
+        </div>
+      )}
+
+      {detail && !detailLoading && detail.tickets && Object.values(detail.tickets).some((v) => v.length > 0) && (
+        <div
+          style={{
+            marginBottom: theme.spacing(2),
+            padding: theme.spacing(1.5),
+            background: theme.colors.background.secondary,
+            borderRadius: theme.shape.radius.default,
+            border: `1px solid ${theme.colors.border.weak}`,
+          }}
+        >
+          <div style={{ fontSize: 12, fontWeight: 600, color: theme.colors.text.secondary, marginBottom: theme.spacing(1) }}>
+            Open Tickets
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing(0.75) }}>
+            {Object.entries(detail.tickets)
+              .filter(([, urls]) => urls.length > 0)
+              .map(([component, urls]) => (
+                <div key={component} style={{ display: 'flex', alignItems: 'center', gap: theme.spacing(1), flexWrap: 'wrap' }}>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: theme.colors.text.secondary,
+                      minWidth: 80,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    {component}
+                  </span>
+                  <TicketLinks urls={urls} theme={theme} />
+                </div>
+              ))}
+          </div>
         </div>
       )}
 

@@ -238,6 +238,7 @@ type WeeklyDetailResponse struct {
 	Build      string                  `json:"build"`
 	Date       string                  `json:"date"`
 	Components []WeeklyComponentDetail `json:"components"`
+	Tickets    map[string][]string     `json:"tickets,omitempty"`
 }
 
 // WeeklyDoc is a pre-computed summary stored in showfast.management.weekly.

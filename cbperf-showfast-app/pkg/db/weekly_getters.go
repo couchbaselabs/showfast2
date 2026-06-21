@@ -42,12 +42,40 @@ func (ds *DataStore) GetWeeklyBuilds(ctx context.Context) (*models.WeeklyBuildsR
 
 func (ds *DataStore) GetWeeklyDetail(ctx context.Context, build string) (*models.WeeklyDetailResponse, error) {
 	// Fast path: read precomputed docs written by GenerateWeeklyDocs.
-	if resp := ds.weeklyDetailFromDocs(ctx, build); resp != nil {
-		return resp, nil
+	var resp *models.WeeklyDetailResponse
+	if r := ds.weeklyDetailFromDocs(ctx, build); r != nil {
+		resp = r
+	} else {
+		// Slow path: live computation (used when generate has not been run yet).
+		var err error
+		resp, err = ds.weeklyDetailLive(ctx, build)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// Slow path: live computation (used when generate has not been run yet).
-	return ds.weeklyDetailLive(ctx, build)
+	if resp != nil {
+		resp.Tickets = weeklyTickets(ds, ctx, build)
+	}
+	return resp, nil
+}
+
+// weeklyTickets reads the tickets field from the pipeline doc for the given build.
+func weeklyTickets(ds *DataStore, ctx context.Context, build string) map[string][]string {
+	type ticketRow struct {
+		Tickets map[string][]string `json:"tickets"`
+	}
+	query := `
+		SELECT p.tickets
+		FROM ` + pipelinesKeyspace + ` p
+		WHERE p.` + "`build`" + ` = $build AND p.` + "`type`" + ` = "weekly"
+		LIMIT 1
+	`
+	rows, err := queryRows[ticketRow](ds.cluster, query, map[string]interface{}{"build": build}, "weekly-tickets query", ctx)
+	if err != nil || len(rows) == 0 || rows[0].Tickets == nil {
+		return nil
+	}
+	return rows[0].Tickets
 }
 
 // weeklyDetailFromDocs reads the precomputed summary + per-component detail docs.
