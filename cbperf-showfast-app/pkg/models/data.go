@@ -82,6 +82,7 @@ type TimelinePanel struct {
 	Title            string               `json:"title"`
 	Category         string               `json:"category"`
 	SubCategory      string               `json:"subCategory"`
+	OrderBy          string               `json:"orderBy,omitempty"`
 	Component        string               `json:"component"`
 	ClusterID        string               `json:"cluster"`
 	ClusterInfo      *TimelineClusterInfo `json:"clusterInfo,omitempty"`

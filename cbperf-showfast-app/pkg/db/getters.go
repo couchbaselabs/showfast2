@@ -107,7 +107,7 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 	//   idx_benchmarks_pipelinegroup_hidden so Couchbase does an index seek rather than scanning
 	//   all metrics and expanding their benchmarks before filtering.
 	selectClause := "SELECT m.id AS metricId, m.`title` AS title, m.component AS component, m.category AS category, "
-	selectClause += "m.subCategory AS subCategory, r.clusterId AS `cluster`, m.tags AS tags, m.chirality AS chirality, t.threshold AS threshold, "
+	selectClause += "m.subCategory AS subCategory, IFMISSING(m.orderBy, '') AS orderBy, r.clusterId AS `cluster`, m.tags AS tags, m.chirality AS chirality, t.threshold AS threshold, "
 	selectClause += "{\"name\": c.name, \"os\": CASE WHEN c.os.distro IS NOT MISSING AND c.os.version IS NOT MISSING THEN c.os.distro || '-' || c.os.version WHEN c.os.distro IS NOT MISSING THEN c.os.distro ELSE TO_STRING(c.os) END, \"cpu\": c.cpu, \"disk\": c.disk, \"memory\": c.memory} AS clusterInfo, "
 	selectClause += "b.`build` AS `build`, b.`value` AS `value`, r.`buildURL` AS `buildUrl`, b.`snapshots` AS snapshots, b.runId AS runId "
 
@@ -160,7 +160,7 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 		params[k] = v
 	}
 
-	query += " ORDER BY m.component, m.category, m.subCategory, m.title ASC"
+	query += " ORDER BY m.component, m.category, m.subCategory, IFMISSING(m.orderBy, ''), m.title ASC"
 
 	queryStart := time.Now()
 	results, err := queryRows[timelinePanelRow](ds.cluster, query, params, "timeline panel", c)
@@ -200,6 +200,33 @@ func (ds *DataStore) GetTimelinePanels(filters *FilterOptions, c context.Context
 		totalPoints += len(pts)
 		panels = append(panels, *panelMap[metricID])
 	}
+
+	// Sort panels by component → category → subCategory → orderBy (empty last) → title.
+	// Done in Go so the result is correct regardless of how the DB handles IFMISSING ordering.
+	sort.SliceStable(panels, func(i, j int) bool {
+		pi, pj := panels[i], panels[j]
+		if pi.Component != pj.Component {
+			return pi.Component < pj.Component
+		}
+		if pi.Category != pj.Category {
+			return pi.Category < pj.Category
+		}
+		if pi.SubCategory != pj.SubCategory {
+			return pi.SubCategory < pj.SubCategory
+		}
+		oi, oj := pi.OrderBy, pj.OrderBy
+		if oi == "" && oj != "" {
+			return false // no orderBy sorts after explicit orderBy
+		}
+		if oi != "" && oj == "" {
+			return true
+		}
+		if oi != oj {
+			return oi < oj
+		}
+		return pi.Title > pj.Title
+	})
+
 	aggMs := time.Since(aggStart).Milliseconds()
 
 	if isPureViewQuery(filters) {

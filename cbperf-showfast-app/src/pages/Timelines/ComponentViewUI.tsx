@@ -4,7 +4,7 @@ import { locationService } from '@grafana/runtime';
 import { Input, Select, Spinner, Tab, TabsBar, useTheme2 } from '@grafana/ui';
 import { ComponentConfig, VariantsConfig, dbComponentIDsForVariant } from './menuApiTypes';
 import { fetchComponentConfig, fetchPanelsForView, fetchVariantsConfig } from './menuService';
-import { TimelinePanel } from './timelinesApiTypes';
+import { PanelGroup, TimelinePanel } from './timelinesApiTypes';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,7 +23,7 @@ function firstVisibleCategory(cfg: ComponentConfig, variantId: string): string {
 // ---------------------------------------------------------------------------
 
 export interface ComponentViewUIProps {
-  onPanelsChange: (panels: TimelinePanel[]) => void;
+  onGroupsChange: (groups: PanelGroup[]) => void;
   onLoadingChange: (loading: boolean) => void;
 }
 
@@ -31,7 +31,7 @@ export interface ComponentViewUIProps {
 // ComponentViewUI
 // ---------------------------------------------------------------------------
 
-export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentViewUIProps) {
+export function ComponentViewUI({ onGroupsChange, onLoadingChange }: ComponentViewUIProps) {
   const theme = useTheme2();
 
   // Stage 1 — variants config (variant defs + ordered component ID list)
@@ -53,6 +53,7 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
   const [subCategoryFilter, setSubCategoryFilter] = useState('');
   const [osFilter, setOsFilter] = useState('');
   const [searchText, setSearchText] = useState('');
+  const [groupBy, setGroupBy] = useState<'none' | 'os'>('none');
 
   // Panel data
   const [panelCache, setPanelCache] = useState<Record<string, TimelinePanel[]>>({});
@@ -253,13 +254,32 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
   );
 
   // -------------------------------------------------------------------------
+  // Group visible panels by the selected dimension
+  // -------------------------------------------------------------------------
+  const groupedPanels = useMemo((): PanelGroup[] => {
+    const panels = visiblePanels ?? [];
+    if (groupBy === 'none') {
+      return [{ label: '', panels }];
+    }
+    const map = new Map<string, TimelinePanel[]>();
+    for (const p of panels) {
+      const key = p.clusterInfo?.os ?? 'Unknown';
+      if (!map.has(key)) { map.set(key, []); }
+      map.get(key)!.push(p);
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([label, ps]) => ({ label, panels: ps }));
+  }, [visiblePanels, groupBy]);
+
+  // -------------------------------------------------------------------------
   // Notify parent when visible panels change
   // -------------------------------------------------------------------------
   useEffect(() => {
     if (panelsLoading) { return; }
-    onPanelsChange(visiblePanels ?? []);
+    onGroupsChange(groupedPanels);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visiblePanels, panelsLoading]);
+  }, [groupedPanels, panelsLoading]);
 
   // -------------------------------------------------------------------------
   // Selection handlers
@@ -433,6 +453,19 @@ export function ComponentViewUI({ onPanelsChange, onLoadingChange }: ComponentVi
             value={osFilter || ''}
             onChange={(opt: SelectableValue<string>) => setOsFilter(opt?.value ?? '')}
             width={14}
+            isClearable={false}
+          />
+        )}
+
+        {availableOS.length > 1 && (
+          <Select
+            options={[
+              { value: 'none', label: 'No grouping' },
+              { value: 'os', label: 'Group by OS' },
+            ]}
+            value={groupBy}
+            onChange={(opt: SelectableValue<string>) => setGroupBy((opt?.value ?? 'none') as 'none' | 'os')}
+            width={16}
             isClearable={false}
           />
         )}

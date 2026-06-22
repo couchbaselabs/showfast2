@@ -33,6 +33,11 @@ export interface TimelinePanel {
   threshold?: number | null;
 }
 
+export interface PanelGroup {
+  label: string;
+  panels: TimelinePanel[];
+}
+
 export interface TimelinePanelsQuery {
   serverMajorMinor?: string[];
   pipelineGroup?: string[];
