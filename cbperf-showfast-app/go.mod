@@ -1,10 +1,11 @@
 module github.com/cbperf/showfast
 
-go 1.25.7
+go 1.26.10
 
 require (
 	github.com/couchbase/gocb/v2 v2.12.1
 	github.com/gin-gonic/gin v1.12.0
+	github.com/google/uuid v1.6.0
 	github.com/grafana/grafana-plugin-sdk-go v0.291.1
 )
 
@@ -42,7 +43,6 @@ require (
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grafana/otel-profiling-go v0.5.1 // indirect
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.9 // indirect
